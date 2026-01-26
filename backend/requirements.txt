@@ -1,0 +1,26 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+asyncpg
+alembic
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+qdrant-client
+redis
+neo4j
+langchain
+langchain-community
+langchain-qdrant
+langchain-ollama
+langchain-huggingface # ✅ 추가됨
+sentence-transformers # ✅ 추가됨
+langchain-experimental
+pypdf
+tiktoken
+python-dotenv
+pydantic-settings
+docling
+duckduckgo-search
+langgraph
+bcrypt<4.0.0

@@ -1,0 +1,6 @@
+./node_modules
+/setup
+/setup_b
+/.venv
+/backend/.env
+/frontend/node_modules
