@@ -8,7 +8,7 @@ import {
   Globe, Brain, Key, Server, Layout, Plug, Link, ArrowUp, ArrowDown, GripVertical, BookOpen,
   Image, HardDrive, RefreshCw, Home, Zap, BarChart3, LayoutDashboard,
   Split, AlignJustify, ArrowLeft, ArrowRight, FolderUp, Share2, Network, GitBranch,
-  LogOut, UserCircle // 유지
+  LogOut, UserCircle, Mail // ✅ Mail 추가됨
 } from 'lucide-react';
 
 export { 
@@ -21,5 +21,5 @@ export {
   Globe, Brain, Key, Server, Layout, Plug, Link, ArrowUp, ArrowDown, GripVertical, BookOpen,
   Image, HardDrive, RefreshCw, Home, Zap, BarChart3, LayoutDashboard,
   Split, AlignJustify, ArrowLeft, ArrowRight, FolderUp, Share2, Network, GitBranch,
-  LogOut, UserCircle
+  LogOut, UserCircle, Mail // ✅ Export에도 추가
 };

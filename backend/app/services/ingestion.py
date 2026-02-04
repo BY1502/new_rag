@@ -3,14 +3,17 @@ import shutil
 import logging
 import datetime
 import torch
+import re
 from fastapi import UploadFile
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
-from langchain_experimental.text_splitter import SemanticChunker
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_experimental.graph_transformers import LLMGraphTransformer
 from langchain_ollama import ChatOllama
 from langchain_core.documents import Document
-from docling.document_converter import DocumentConverter
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import PdfPipelineOptions, TableStructureOptions
+from docling.datamodel.base_models import InputFormat
+
 from app.services.vector_store import VectorStoreService
 from app.services.graph_store import GraphStoreService
 from app.core.config import settings
@@ -24,8 +27,21 @@ class IngestionService:
         self.graph_service = GraphStoreService()
         self.upload_dir = "/tmp/rag_uploads"
         os.makedirs(self.upload_dir, exist_ok=True)
-        self.converter = DocumentConverter()
         os.environ["OLLAMA_HOST"] = settings.OLLAMA_BASE_URL
+
+        # [수정 1] OCR(문자 인식) 강제 활성화 설정
+        pipeline_options = PdfPipelineOptions()
+        pipeline_options.do_ocr = True  # OCR 켜기
+        pipeline_options.do_table_structure = True # 표 구조 인식 켜기
+        pipeline_options.table_structure_options.do_cell_matching = True
+
+        # DocumentConverter에 옵션 적용
+        self.converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
+                InputFormat.IMAGE: PdfFormatOption(pipeline_options=pipeline_options)
+            }
+        )
 
         device = "cpu"
         if torch.cuda.is_available(): device = "cuda"
@@ -33,13 +49,12 @@ class IngestionService:
 
         self.embeddings = HuggingFaceEmbeddings(
             model_name=settings.EMBEDDING_MODEL,
-            model_kwargs={'device': device},
+            model_kwargs={'device': device, 'trust_remote_code': True},
             encode_kwargs={'normalize_embeddings': True}
         )
         
         self.llm = ChatOllama(model=settings.LLM_MODEL, temperature=0)
         
-        # RFP 온톨로지
         self.llm_transformer = LLMGraphTransformer(
             llm=self.llm,
             allowed_nodes=["Client", "Project", "Technology", "Requirement", "Budget", "Timeline", "Department", "Document"],
@@ -47,10 +62,26 @@ class IngestionService:
             strict_mode=False 
         )
 
+    def clean_markdown(self, text: str) -> str:
+        """
+        [수정 2] 의미 없는 특수문자나 빈 표 테두리 제거
+        """
+        lines = []
+        for line in text.split('\n'):
+            stripped = line.strip()
+            # 1. 빈 줄 패스
+            if not stripped: continue
+            
+            # 2. | 또는 - 만으로 구성된 줄(표 테두리)인데 글자가 없는 경우 패스
+            # 예: |---|---| 또는 +---+
+            if re.match(r'^[|\-\+\s]+$', stripped):
+                continue
+            
+            lines.append(line)
+        
+        return '\n'.join(lines)
+
     async def process_file(self, file: UploadFile, kb_id: str, user_id: int, chunk_size: int = 500):
-        """
-        [핵심] user_id 파라미터 추가됨
-        """
         file_path = os.path.join(self.upload_dir, file.filename)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -58,23 +89,32 @@ class IngestionService:
         try:
             logger.info(f"Processing file: {file.filename} for User: {user_id}")
             
+            # 문서 변환 (OCR 수행)
             conversion_result = self.converter.convert(file_path)
             doc = conversion_result.document
             markdown_text = doc.export_to_markdown()
             
-            if not markdown_text.strip(): return False, "No text extracted."
+            # [수정 3] 추출된 텍스트 정제
+            cleaned_text = self.clean_markdown(markdown_text)
+            
+            if not cleaned_text.strip(): 
+                return False, "텍스트를 추출할 수 없습니다. (이미지 화질이 낮거나 글자가 없을 수 있음)"
 
-            # [핵심] 모든 청크의 메타데이터에 user_id 심기
             base_metadata = {
                 "source": file.filename,
                 "kb_id": kb_id,
-                "user_id": user_id, # 👈 중요!
+                "user_id": user_id,
                 "title": doc.name or file.filename,
                 "uploaded_at": datetime.datetime.now().isoformat(),
             }
 
             markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=[("#", "H1"), ("##", "H2")])
-            md_header_splits = markdown_splitter.split_text(markdown_text)
+            md_header_splits = markdown_splitter.split_text(cleaned_text)
+            
+            # 헤더가 없어서 통으로 들어간 경우 처리
+            if not md_header_splits:
+                md_header_splits = [Document(page_content=cleaned_text, metadata={})]
+
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=50)
             final_splits = text_splitter.split_documents(md_header_splits)
 
@@ -82,29 +122,31 @@ class IngestionService:
                 split.metadata.update(base_metadata)
                 split.metadata["chunk_index"] = idx
 
-            # 1. Vector Store 저장 (user_id 포함됨)
             texts = [split.page_content for split in final_splits]
             metadatas = [split.metadata for split in final_splits]
+            
+            if not texts:
+                return False, "청킹 결과가 비어있습니다."
+
+            # DB 저장
             await self.vector_service.add_documents(kb_id, texts, metadatas)
             
-            # 2. Graph Store 저장 (user_id 포함됨)
-            # 그래프는 속도가 느리므로 테스트 시 앞부분만
-            subset_splits = final_splits[:3] 
-            graph_documents = self.llm_transformer.convert_to_graph_documents(subset_splits)
-            
-            for graph_doc in graph_documents:
-                # Document 노드에 유저 정보 심기
-                graph_doc.source = Document(page_content="Source", metadata=base_metadata)
-                
-                # [고급] 모든 노드에 user_id 속성을 추가하면 좋지만, 
-                # LangChain 기본 변환기로는 어려우므로 여기서는 Document 연결성만 보장
-            
-            self.graph_service.add_graph_documents(graph_documents)
+            # 그래프 저장 (일부만)
+            try:
+                subset_splits = final_splits[:3] 
+                graph_documents = self.llm_transformer.convert_to_graph_documents(subset_splits)
+                for graph_doc in graph_documents:
+                    graph_doc.source = Document(page_content="Source", metadata=base_metadata)
+                self.graph_service.add_graph_documents(graph_documents)
+            except Exception as e:
+                logger.warning(f"Graph extraction failed (non-fatal): {e}")
 
-            return True, f"File processed for User {user_id}"
+            return True, f"File processed successfully. (Extracted {len(texts)} chunks)"
 
         except Exception as e:
             logger.error(f"Ingestion Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False, str(e)
         finally:
             if os.path.exists(file_path): os.remove(file_path)

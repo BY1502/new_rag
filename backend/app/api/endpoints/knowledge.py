@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import deps
 from app.services.ingestion import IngestionService
@@ -7,14 +7,18 @@ from app.models.user import User
 router = APIRouter()
 ingestion_service = IngestionService()
 
-@router.post("/{kb_id}/upload")
+# ✅ 수정됨: URL 경로에서 {kb_id} 제거 -> /upload 로 변경
+# 프론트엔드가 /knowledge/upload 로 호출하므로 이를 맞춰줌
+@router.post("/upload")
 async def upload_file(
-    kb_id: str,
+    # kb_id를 URL이 아닌 Form Data로 받음 (없으면 기본값 "default_kb")
+    kb_id: str = Form("default_kb"), 
     file: UploadFile = File(...),
     db: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user) # 유저 정보 주입
+    current_user: User = Depends(deps.get_current_user)
 ):
-    # [핵심] user_id를 IngestionService에 전달
+    print(f"📂 Uploading file: {file.filename} to KB: {kb_id} by User: {current_user.email}")
+    
     success, message = await ingestion_service.process_file(
         file=file, 
         kb_id=kb_id,
@@ -26,12 +30,13 @@ async def upload_file(
         
     return {"message": message}
 
-@router.get("/{kb_id}/files")
+# ✅ 수정됨: 파일 목록 조회도 경로를 맞춰줌 (/files)
+@router.get("/files")
 async def list_files(
-    kb_id: str,
+    kb_id: str = "default_kb", # Query Parameter로 받음 (?kb_id=...)
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
-    # 임시: Qdrant에 직접 쿼리해서 해당 유저의 파일 목록만 가져오는 기능은
-    # Qdrant의 Scroll API를 써야 함. 여기서는 빈 리스트 반환 (DB 구축 후 연결 권장)
+    # TODO: 추후 DB나 Vector Store에서 실제 파일 목록 조회 로직 구현 필요
+    # 현재는 에러 방지용 빈 리스트 반환
     return {"files": []}

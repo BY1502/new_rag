@@ -1,17 +1,26 @@
-import { API_BASE_URL, getAuthHeader } from './config';
+import axios from 'axios';
 
-// --- 1. 채팅 스트리밍 (Real Backend) ---
+// 1. 설정값 직접 정의
+const API_BASE_URL = 'http://localhost:8000/api/v1';
+
+// 2. 인증 헤더 헬퍼
+const getAuthHeader = () => {
+  const token = localStorage.getItem('rag_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
+// --- [API 1] 채팅 스트리밍 (버퍼링 대응 추가) ---
 export const streamChat = async ({ query, model, kb_id, web_search, active_mcp_ids }, onChunk, onComplete) => {
   try {
     const response = await fetch(`${API_BASE_URL}/chat/stream`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...getAuthHeader() // JWT 토큰 포함
+        ...getAuthHeader()
       },
       body: JSON.stringify({
         message: query,
-        kb_id: kb_id,
+        kb_id: kb_id || "default_kb",
         use_web_search: web_search || false,
         active_mcp_ids: active_mcp_ids || []
       })
@@ -19,58 +28,57 @@ export const streamChat = async ({ query, model, kb_id, web_search, active_mcp_i
 
     if (!response.ok) {
       if (response.status === 401) throw new Error("로그인이 필요합니다.");
-      throw new Error("Network response was not ok");
+      throw new Error(`Network response was not ok: ${response.status}`);
     }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = "";
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n').filter(line => line.trim() !== '');
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // 마지막 불완전한 라인은 버퍼에 남김
 
       for (const line of lines) {
+        if (!line.trim()) continue;
         try {
-          // 백엔드에서 JSON 문자열로 보냄
-          const jsonStr = line.startsWith('"') && line.endsWith('"') 
-            ? JSON.parse(line) // 이중 인코딩 된 경우
-            : line;
-            
+          const jsonStr = line.startsWith('"') && line.endsWith('"') ? JSON.parse(line) : line;
           const data = typeof jsonStr === 'object' ? jsonStr : JSON.parse(jsonStr);
           onChunk(data);
         } catch (e) {
-          console.error("Parse Error:", e, line);
+          console.error("Parse Error:", e);
         }
       }
     }
-    onComplete();
+    if (onComplete) onComplete();
 
   } catch (error) {
     console.error("Stream Error:", error);
     onChunk({ type: 'content', content: `\n[Error] ${error.message}` });
-    onComplete();
+    if (onComplete) onComplete();
   }
 };
 
-// --- 2. 파일 업로드 (Real Backend) ---
 export const uploadFileToBackend = async (file, kbId, chunkSize, chunkOverlap) => {
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('kb_id', kbId);
-  formData.append('chunk_size', chunkSize);
-  formData.append('chunk_overlap', chunkOverlap);
+  formData.append('kb_id', kbId || "default_kb");
+  if (chunkSize) formData.append('chunk_size', chunkSize);
+  if (chunkOverlap) formData.append('chunk_overlap', chunkOverlap);
 
   const response = await fetch(`${API_BASE_URL}/knowledge/upload`, {
     method: 'POST',
-    headers: {
-      ...getAuthHeader()
-    },
+    headers: { ...getAuthHeader() },
     body: formData
   });
 
-  if (!response.ok) throw new Error("Upload failed");
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || "Upload failed");
+  }
   return await response.json();
 };

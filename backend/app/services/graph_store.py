@@ -8,7 +8,7 @@ class GraphStoreService:
         # settings.NEO4J_URI 등이 .env에 정의되어 있어야 합니다.
         try:
             self.graph = Neo4jGraph(
-                url=settings.NEO4J_URI,
+                url=settings.NEO4J_URL,
                 username=settings.NEO4J_USERNAME,
                 password=settings.NEO4J_PASSWORD
             )

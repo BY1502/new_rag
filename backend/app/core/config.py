@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     QDRANT_URL: str
     REDIS_URL: str
+    # Neo4j
+    NEO4J_URL: str
+    NEO4J_USERNAME: str
+    NEO4J_PASSWORD: str
     
     # Local LLM
     OLLAMA_BASE_URL: str

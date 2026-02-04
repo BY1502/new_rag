@@ -1,63 +1,45 @@
+import os
 from langchain_qdrant import QdrantVectorStore
+from qdrant_client import QdrantClient, models
 from langchain_huggingface import HuggingFaceEmbeddings
-from qdrant_client import QdrantClient
-from qdrant_client.http import models # 필터링 모델
 from app.core.config import settings
-import torch
 
 class VectorStoreService:
     def __init__(self):
-        self.client = QdrantClient(url=settings.QDRANT_URL)
-        
+        # 임베딩 모델 설정
         device = "cpu"
+        import torch
         if torch.cuda.is_available(): device = "cuda"
         elif torch.backends.mps.is_available(): device = "mps"
-            
+
         self.embeddings = HuggingFaceEmbeddings(
             model_name=settings.EMBEDDING_MODEL,
-            model_kwargs={'device': device},
+            model_kwargs={'device': device, 'trust_remote_code': True},
             encode_kwargs={'normalize_embeddings': True}
         )
+        
+        self.client = QdrantClient(url=settings.QDRANT_URL)
 
-    def get_collection_name(self, kb_id: str):
-        return f"kb_{kb_id}"
-
-    def ensure_collection(self, collection_name: str):
-        if not self.client.collection_exists(collection_name):
-            self.client.create_collection(
-                collection_name=collection_name,
-                vectors_config=models.VectorParams(size=1024, distance=models.Distance.COSINE),
-            )
-
-    async def add_documents(self, kb_id: str, texts: list, metadatas: list):
+    def get_retriever(self, kb_id: str, user_id: int):
         """
-        문서 저장 시 metadata에 user_id가 반드시 포함되어 있어야 함
+        [핵심 수정] 검색 시 content_payload_key를 명시하여 벡터 데이터가 아닌 텍스트만 가져오게 함
         """
-        collection_name = self.get_collection_name(kb_id)
-        self.ensure_collection(collection_name)
+        collection_name = f"kb_{kb_id}"
+        
+        # 컬렉션 존재 여부 확인 (없으면 생성하지 않음 - 검색 시점이니까)
+        # LangChain의 QdrantVectorStore는 컬렉션이 없으면 에러날 수 있으므로 예외처리 가능하지만
+        # 여기서는 존재하는 것을 가정하고 설정합니다.
 
         vector_store = QdrantVectorStore(
             client=self.client,
             collection_name=collection_name,
             embedding=self.embeddings,
+            # ✅ 여기가 중요! "page_content" 필드만 텍스트로 인식하도록 강제
+            content_payload_key="page_content",
+            metadata_payload_key="metadata"
         )
         
-        await vector_store.aadd_texts(texts=texts, metadatas=metadatas)
-        return True
-
-    def get_retriever(self, kb_id: str, user_id: int, k: int = 4):
-        """
-        [핵심] 유저 ID로 필터링된 Retriever 반환
-        """
-        collection_name = self.get_collection_name(kb_id)
-        
-        vector_store = QdrantVectorStore(
-            client=self.client,
-            collection_name=collection_name,
-            embedding=self.embeddings,
-        )
-        
-        # Qdrant 필터 조건: metadata.user_id == current_user_id
+        # 유저 ID 필터링 (내 문서만 검색)
         user_filter = models.Filter(
             must=[
                 models.FieldCondition(
@@ -66,8 +48,27 @@ class VectorStoreService:
                 )
             ]
         )
-        
+
         return vector_store.as_retriever(
             search_type="similarity",
-            search_kwargs={"k": k, "filter": user_filter}
+            search_kwargs={
+                "k": 4, 
+                "filter": user_filter
+            }
         )
+
+    async def add_documents(self, kb_id: str, texts: list, metadatas: list):
+        """
+        문서 저장
+        """
+        collection_name = f"kb_{kb_id}"
+        
+        vector_store = QdrantVectorStore(
+            client=self.client,
+            collection_name=collection_name,
+            embedding=self.embeddings,
+            content_payload_key="page_content",
+            metadata_payload_key="metadata"
+        )
+        
+        await vector_store.aadd_texts(texts=texts, metadatas=metadatas)
