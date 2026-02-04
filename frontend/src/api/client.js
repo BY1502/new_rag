@@ -7,7 +7,7 @@ const getAuthHeader = () => {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
-// use_deep_think 파라미터 추가
+// model, use_deep_think 추가 전송
 export const streamChat = async ({ query, model, kb_id, web_search, use_deep_think, active_mcp_ids }, onChunk, onComplete) => {
   try {
     const response = await fetch(`${API_BASE_URL}/chat/stream`, {
@@ -19,6 +19,7 @@ export const streamChat = async ({ query, model, kb_id, web_search, use_deep_thi
       body: JSON.stringify({
         message: query,
         kb_id: kb_id || "default_kb",
+        model: model, // ✅ 전송
         use_web_search: web_search || false,
         use_deep_think: use_deep_think || false, // ✅ 전송
         active_mcp_ids: active_mcp_ids || []

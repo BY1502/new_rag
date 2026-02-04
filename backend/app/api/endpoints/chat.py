@@ -21,6 +21,7 @@ async def chat_stream(
             message=request.message,
             kb_id=request.kb_id,
             user_id=current_user.id,
+            model=request.model,             # ✅ 전달
             use_web_search=request.use_web_search,
             use_deep_think=request.use_deep_think, # ✅ 전달
             active_mcp_ids=request.active_mcp_ids

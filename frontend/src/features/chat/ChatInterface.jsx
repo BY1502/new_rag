@@ -5,7 +5,6 @@ import { streamChat } from '../../api/client';
 import { Bot, User, Sparkles, Send, Paperclip, ChevronDown, X, Upload, Loader2, CheckCircle, Database, Plug, Globe, Brain, StopCircle, FileText, Copy, RotateCw } from '../../components/ui/Icon';
 
 export default function ChatInterface() {
-  // ✅ setSessions와 currentSessionId를 가져옵니다.
   const { currentMessages, addMessage, config, agents, currentAgent, setCurrentAgentId, knowledgeBases, currentKbId, setCurrentKbId, mcpServers, setSessions, currentSessionId } = useStore();
   
   const [input, setInput] = useState('');
@@ -61,7 +60,6 @@ export default function ChatInterface() {
     if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
 
-    // 현재 세션 ID 저장 (클로저 문제 방지)
     const activeSessionId = currentSessionId;
 
     if (!retryQuery) {
@@ -74,9 +72,10 @@ export default function ChatInterface() {
 
     const aiMessageId = crypto.randomUUID();
     let accumulatedText = "";
+    
+    // UI에 'Deep Thinking' 중임을 표시
     const initialThinking = useDeepThink ? "사용자의 질문을 심층 분석하고 있습니다..." : null;
 
-    // AI 메시지 placeholder 추가
     addMessage({ 
       id: aiMessageId, 
       role: 'assistant', 
@@ -91,15 +90,16 @@ export default function ChatInterface() {
     try {
       await streamChat({
         query: query,
-        model: currentAgent?.model || config.llm,
+        // ✅ [수정] 설정(config.llm)을 우선순위로 적용하여 모델 변경 반영
+        model: config.llm || currentAgent?.model, 
         agent_id: currentAgent?.id,
         kb_id: currentKbId,
         web_search: useWebSearch,
+        use_deep_think: useDeepThink, // ✅ [수정] Deep Thinking 상태 전달
         active_mcp_ids: activeMcpIds,
       }, (chunk) => {
         if (abortControllerRef.current?.signal.aborted) return;
 
-        // ✅ 수정됨: useStore.setState 대신 setSessions 사용
         if (chunk.type === 'thinking') {
           setSessions(prev => prev.map(s => s.id === activeSessionId ? {
             ...s,
@@ -142,12 +142,15 @@ export default function ChatInterface() {
 
   const CurrentIcon = getAgentIcon(currentAgent?.id);
 
+  // ... (나머지 UI 코드는 원본 유지)
   return (
     <div className="flex-1 flex flex-col min-h-0 relative bg-gray-50/30">
+      {/* 헤더 */}
       <div className="h-12 border-b bg-white flex items-center px-6 justify-between shrink-0 shadow-sm z-10">
         <div className="flex items-center gap-3"></div>
       </div>
 
+      {/* 메시지 리스트 */}
       <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 custom-scrollbar scroll-smooth" ref={scrollRef}>
         {currentMessages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-6 opacity-80">
@@ -166,8 +169,10 @@ export default function ChatInterface() {
         )}
       </div>
 
+      {/* 입력창 영역 */}
       <div className="p-6 bg-white">
         <div className="max-w-4xl mx-auto relative">
+          
           {isTyping && (
             <div className="absolute -top-14 left-1/2 -translate-x-1/2 z-20">
               <button onClick={handleStop} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 shadow-md rounded-full text-sm text-red-500 hover:bg-red-50 font-medium transition animate-in fade-in slide-in-from-bottom-2"><StopCircle size={16} fill="currentColor" className="opacity-20"/> 생성 중단</button>
@@ -175,7 +180,10 @@ export default function ChatInterface() {
           )}
 
           <div className="bg-gray-50 border border-gray-200 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all flex flex-col relative">
+            
+            {/* 상단 태그 영역 */}
             <div className="px-4 pt-3 flex flex-wrap items-center gap-2">
+              {/* 에이전트 선택 */}
               <div className="relative">
                 <button onClick={(e) => { e.stopPropagation(); setIsAgentMenuOpen(!isAgentMenuOpen); setIsKbMenuOpen(false); setIsMcpMenuOpen(false); }} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-[11px] font-bold transition cursor-pointer">
                   <CurrentIcon size={12}/><span className="max-w-[100px] truncate">{currentAgent?.name}</span><ChevronDown size={10} className={`transition-transform ${isAgentMenuOpen ? 'rotate-180' : ''}`}/>
@@ -194,6 +202,7 @@ export default function ChatInterface() {
                 )}
               </div>
 
+              {/* 지식 베이스 선택 */}
               <div className="relative">
                 <button onClick={(e) => { e.stopPropagation(); setIsKbMenuOpen(!isKbMenuOpen); setIsAgentMenuOpen(false); setIsMcpMenuOpen(false); }} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-bold transition cursor-pointer">
                   <Database size={12}/><span className="max-w-[100px] truncate">{currentKb?.name || '지식 베이스 없음'}</span><ChevronDown size={10} className={`transition-transform ${isKbMenuOpen ? 'rotate-180' : ''}`}/>
@@ -212,6 +221,7 @@ export default function ChatInterface() {
                 )}
               </div>
 
+              {/* 파일 태그 */}
               {files.map((file, idx) => (
                 <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border rounded-lg text-[11px] font-medium text-gray-700 shadow-sm animate-in zoom-in duration-200">
                   <Paperclip size={10} className="text-gray-400"/><span className="max-w-[100px] truncate">{file.name}</span><button onClick={() => setFiles(p => p.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500 ml-1"><X size={10} /></button>
@@ -226,10 +236,12 @@ export default function ChatInterface() {
                 <input type="file" multiple className="hidden" ref={fileInputRef} onChange={handleFileSelect} />
                 <button onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:bg-gray-200 hover:text-gray-600 rounded-xl transition" title="파일 첨부"><Paperclip size={18}/></button>
 
+                {/* 웹 검색 */}
                 <button onClick={() => setUseWebSearch(!useWebSearch)} className={`p-2 rounded-xl transition flex items-center gap-1.5 ${useWebSearch ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:bg-gray-200 hover:text-gray-600'}`} title="웹 검색">
                   <Globe size={18} />{useWebSearch && <span className="text-xs font-bold">Search On</span>}
                 </button>
 
+                {/* MCP 도구 선택 메뉴 */}
                 <div className="relative">
                   <button 
                     onClick={(e) => { e.stopPropagation(); setIsMcpMenuOpen(!isMcpMenuOpen); setIsAgentMenuOpen(false); setIsKbMenuOpen(false); }}
@@ -267,6 +279,7 @@ export default function ChatInterface() {
                   )}
                 </div>
 
+                {/* 딥 씽킹 & 모델 정보 */}
                 <div className="flex items-center bg-gray-100 rounded-xl p-0.5 ml-1">
                   <button onClick={() => setUseDeepThink(!useDeepThink)} className={`p-1.5 rounded-lg transition flex items-center gap-1.5 ${useDeepThink ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`} title="Deep Thinking">
                     <Brain size={18} />
@@ -294,17 +307,21 @@ function MessageBubble({ msg, onRegenerate }) {
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} group`}>
       <div className={`flex max-w-[85%] ${isUser ? 'flex-row-reverse' : 'flex-row'} items-start gap-4`}>
         
+        {/* 아바타 */}
         <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm ${isUser ? 'bg-indigo-600' : 'bg-white border border-gray-200'}`}>
           {isUser ? <User size={18} className="text-white" /> : <Bot size={18} className="text-indigo-600" />}
         </div>
 
+        {/* 메시지 내용 */}
         <div className="flex flex-col gap-2 min-w-0">
           
+          {/* 유저 이름 및 시간 */}
           <div className={`flex items-center gap-2 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
             <span className="text-xs font-bold text-gray-600">{isUser ? 'You' : 'AI Agent'}</span>
             <span className="text-[10px] text-gray-400">{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
           </div>
 
+          {/* Thinking 박스 */}
           {msg.thinking && (
             <div className="text-xs text-gray-500 italic bg-white p-3 rounded-2xl border border-indigo-100 shadow-sm animate-in fade-in slide-in-from-left-2 duration-300">
               <div className="flex items-center gap-2 mb-1 text-indigo-500 font-bold">
@@ -316,6 +333,7 @@ function MessageBubble({ msg, onRegenerate }) {
             </div>
           )}
 
+          {/* 메인 텍스트 */}
           {msg.text && (
             <div className={`p-4 rounded-2xl shadow-sm text-sm leading-relaxed break-words relative group/bubble ${
                 isUser 
@@ -330,6 +348,7 @@ function MessageBubble({ msg, onRegenerate }) {
                 </div>
               )}
 
+              {/* 기능 버튼 (AI 메시지일 때만) */}
               {!isUser && (
                 <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover/bubble:opacity-100 transition-opacity">
                   <button onClick={() => navigator.clipboard.writeText(msg.text)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition" title="복사"><Copy size={12}/></button>
@@ -339,6 +358,7 @@ function MessageBubble({ msg, onRegenerate }) {
             </div>
           )}
           
+          {/* 첨부파일 표시 */}
           {msg.attachments && msg.attachments.length > 0 && (
              <div className={`flex flex-wrap gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
                {msg.attachments.map((file, i) => (
