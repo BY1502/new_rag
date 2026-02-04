@@ -8,13 +8,13 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_community.tools import DuckDuckGoSearchRun
 from app.core.config import settings
 from app.services.vector_store import VectorStoreService
-from app.services.xlam_service import XLAMService # ✅ 추가
+from app.services.xlam_service import XLAMService
 
 class RAGService:
     def __init__(self):
         os.environ["OLLAMA_HOST"] = settings.OLLAMA_BASE_URL
         self.vector_service = VectorStoreService()
-        self.xlam_service = XLAMService() # ✅ xLAM 초기화
+        self.xlam_service = XLAMService()
         
         self.llm = ChatOllama(model=settings.LLM_MODEL, temperature=0)
         self.web_search_tool = DuckDuckGoSearchRun()
@@ -25,36 +25,35 @@ class RAGService:
         kb_id: str, 
         user_id: int, 
         use_web_search: bool = False,
+        use_deep_think: bool = False, # ✅ 파라미터 추가
         active_mcp_ids: Optional[List[str]] = None
     ) -> AsyncGenerator[str, None]:
         
         try:
-            # [Router] 질문 의도 분석
-            yield json.dumps({"type": "thinking", "thinking": "🤔 질문의 의도를 분석하고 있습니다..."}) + "\n"
-            
-            router_prompt = ChatPromptTemplate.from_template("""
-            Analyze the user's question and choose the best processing mode.
-            
-            Question: {question}
-            
-            Options:
-            - 'process': Use this if the user wants to execute a logistics/business process (e.g., "dispatch orders", "create routes", "check closed orders").
-            - 'search': Use this if the user asks for real-time external info (e.g., weather, news).
-            - 'rag': Use this for questions about documents/manuals.
-            - 'chat': Use this for general conversation.
-            
-            Answer (process/search/rag/chat):
-            """)
-            router_chain = router_prompt | self.llm | StrOutputParser()
-            
-            # xLAM 모드 강제 조건 (active_mcp_ids에 'xlam'이 있거나, web_search가 꺼져있을 때 판단)
+            # [Router] 질문 의도 분석 (Deep Thinking이 켜져있거나, 모호할 때 수행)
             route = "rag"
-            if use_web_search:
+            
+            if use_deep_think: # ✅ 딥 씽킹 활성화 시에만 분석 과정 노출
+                yield json.dumps({"type": "thinking", "thinking": "🤔 질문의 의도를 심층 분석하고 있습니다..."}) + "\n"
+                
+                router_prompt = ChatPromptTemplate.from_template("""
+                Analyze the user's question and choose the best processing mode.
+                Question: {question}
+                Options: 'process' (logistics/business execution), 'search' (real-time info), 'rag' (documents), 'chat' (general).
+                Answer (process/search/rag/chat):
+                """)
+                router_chain = router_prompt | self.llm | StrOutputParser()
                 route_result = await router_chain.ainvoke({"question": message})
                 route = route_result.strip().lower()
-            elif "배차" in message or "주문" in message or "루트" in message or "지시" in message:
-                route = "process" # 간단한 키워드 감지
+                
+                yield json.dumps({"type": "thinking", "thinking": f"🧭 분석 결과: '{route}' 모드로 전략을 수립합니다."}) + "\n"
             
+            else:
+                # 딥 씽킹 꺼져있으면 단순 키워드 매칭으로 빠르게 처리
+                if use_web_search: route = "search"
+                elif any(k in message for k in ["배차", "주문", "루트", "지시"]): route = "process"
+                else: route = "rag"
+
             # --- [MODE 1] xLAM Process Execution ---
             if "process" in route:
                 yield json.dumps({"type": "thinking", "thinking": "🚀 xLAM 자율 에이전트 모드로 전환합니다."}) + "\n"
@@ -62,9 +61,11 @@ class RAGService:
                     yield chunk
                 return
 
+            context_text = ""
+            
             # --- [MODE 2] Web Search ---
             if "search" in route:
-                yield json.dumps({"type": "thinking", "thinking": "🌐 웹 검색을 실행합니다..."}) + "\n"
+                if use_deep_think: yield json.dumps({"type": "thinking", "thinking": "🌐 웹 검색을 실행하여 정보를 수집합니다..."}) + "\n"
                 try:
                     res = self.web_search_tool.invoke(message)
                     context_text = f"[Web Search Result]\n{res}"
@@ -73,30 +74,44 @@ class RAGService:
                     
             # --- [MODE 3] RAG (Document Search) ---
             else:
-                yield json.dumps({"type": "thinking", "thinking": f"🔍 문서 검색 중..."}) + "\n"
+                if use_deep_think: yield json.dumps({"type": "thinking", "thinking": f"🔍 지식 베이스({kb_id})에서 관련 문서를 탐색 중..."}) + "\n"
                 retriever = self.vector_service.get_retriever(kb_id, user_id)
                 docs = await retriever.ainvoke(message)
                 if docs:
                     context_text = "\n\n".join([doc.page_content for doc in docs])
-                    yield json.dumps({"type": "thinking", "thinking": f"✅ 문서 {len(docs)}개 참조"}) + "\n"
+                    if use_deep_think: yield json.dumps({"type": "thinking", "thinking": f"✅ 문서 {len(docs)}개를 참조하여 답변을 구성합니다."}) + "\n"
                 else:
                     context_text = ""
-                    yield json.dumps({"type": "thinking", "thinking": "❌ 관련 문서 없음"}) + "\n"
+                    if use_deep_think: yield json.dumps({"type": "thinking", "thinking": "❌ 관련 문서를 찾지 못했습니다."}) + "\n"
 
-            # 답변 생성 (RAG/General)
+            # 답변 생성
             prompt = ChatPromptTemplate.from_template("""
             [문맥]
             {context}
-            
             [질문]
             {question}
-            
             답변해주세요:
             """)
             chain = prompt | self.llm
+            full_response = ""
             async for chunk in chain.astream({"context": context_text, "question": message}):
                 content = chunk.content if hasattr(chunk, 'content') else str(chunk)
+                full_response += content
                 yield json.dumps({"type": "content", "content": content}) + "\n"
+
+            # [Self-Correction] 자기 검증 (Deep Thinking 켜져있을 때만)
+            if use_deep_think and len(full_response) > 50:
+                yield json.dumps({"type": "thinking", "thinking": "🛡️ 답변의 정확성을 자체 검증(Self-Reflection) 중..."}) + "\n"
+                reflection_prompt = ChatPromptTemplate.from_template("""
+                Question: {question}
+                Answer: {answer}
+                Rate the answer's accuracy (0-100). Output only the number.
+                """)
+                score = await (reflection_prompt | self.llm | StrOutputParser()).ainvoke({"question": message, "answer": full_response})
+                try:
+                    if int(''.join(filter(str.isdigit, score))) > 80:
+                         yield json.dumps({"type": "thinking", "thinking": "✨ 검증 완료: 신뢰도 높음"}) + "\n"
+                except: pass
 
         except Exception as e:
             import traceback

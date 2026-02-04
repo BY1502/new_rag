@@ -22,7 +22,8 @@ async def chat_stream(
             kb_id=request.kb_id,
             user_id=current_user.id,
             use_web_search=request.use_web_search,
-            active_mcp_ids=request.active_mcp_ids # ✅ 추가됨
+            use_deep_think=request.use_deep_think, # ✅ 전달
+            active_mcp_ids=request.active_mcp_ids
         ),
         media_type="text/event-stream"
     )

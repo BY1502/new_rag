@@ -1,16 +1,14 @@
 import axios from 'axios';
 
-// 1. 설정값 직접 정의
 const API_BASE_URL = 'http://localhost:8000/api/v1';
 
-// 2. 인증 헤더 헬퍼
 const getAuthHeader = () => {
   const token = localStorage.getItem('rag_token');
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
-// --- [API 1] 채팅 스트리밍 (버퍼링 대응 추가) ---
-export const streamChat = async ({ query, model, kb_id, web_search, active_mcp_ids }, onChunk, onComplete) => {
+// use_deep_think 파라미터 추가
+export const streamChat = async ({ query, model, kb_id, web_search, use_deep_think, active_mcp_ids }, onChunk, onComplete) => {
   try {
     const response = await fetch(`${API_BASE_URL}/chat/stream`, {
       method: 'POST',
@@ -22,6 +20,7 @@ export const streamChat = async ({ query, model, kb_id, web_search, active_mcp_i
         message: query,
         kb_id: kb_id || "default_kb",
         use_web_search: web_search || false,
+        use_deep_think: use_deep_think || false, // ✅ 전송
         active_mcp_ids: active_mcp_ids || []
       })
     });
@@ -41,7 +40,7 @@ export const streamChat = async ({ query, model, kb_id, web_search, active_mcp_i
       
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop(); // 마지막 불완전한 라인은 버퍼에 남김
+      buffer = lines.pop(); 
 
       for (const line of lines) {
         if (!line.trim()) continue;
@@ -49,9 +48,7 @@ export const streamChat = async ({ query, model, kb_id, web_search, active_mcp_i
           const jsonStr = line.startsWith('"') && line.endsWith('"') ? JSON.parse(line) : line;
           const data = typeof jsonStr === 'object' ? jsonStr : JSON.parse(jsonStr);
           onChunk(data);
-        } catch (e) {
-          console.error("Parse Error:", e);
-        }
+        } catch (e) { console.error("Parse Error:", e); }
       }
     }
     if (onComplete) onComplete();
