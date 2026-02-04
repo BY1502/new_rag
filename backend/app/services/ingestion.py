@@ -4,12 +4,13 @@ import logging
 import datetime
 import torch
 import re
-from fastapi import UploadFile
+from fastapi import UploadFile, BackgroundTasks
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_experimental.graph_transformers import LLMGraphTransformer
 from langchain_ollama import ChatOllama
 from langchain_core.documents import Document
+from langchain_community.document_loaders import PyPDFLoader 
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.pipeline_options import PdfPipelineOptions, TableStructureOptions
 from docling.datamodel.base_models import InputFormat
@@ -29,13 +30,11 @@ class IngestionService:
         os.makedirs(self.upload_dir, exist_ok=True)
         os.environ["OLLAMA_HOST"] = settings.OLLAMA_BASE_URL
 
-        # [수정 1] OCR(문자 인식) 강제 활성화 설정
+        # Docling Setup
         pipeline_options = PdfPipelineOptions()
-        pipeline_options.do_ocr = True  # OCR 켜기
-        pipeline_options.do_table_structure = True # 표 구조 인식 켜기
+        pipeline_options.do_ocr = True
+        pipeline_options.do_table_structure = True
         pipeline_options.table_structure_options.do_cell_matching = True
-
-        # DocumentConverter에 옵션 적용
         self.converter = DocumentConverter(
             format_options={
                 InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
@@ -43,110 +42,102 @@ class IngestionService:
             }
         )
 
-        device = "cpu"
-        if torch.cuda.is_available(): device = "cuda"
-        elif torch.backends.mps.is_available(): device = "mps"
-
+        device = "cpu" if not torch.cuda.is_available() else "cuda"
         self.embeddings = HuggingFaceEmbeddings(
             model_name=settings.EMBEDDING_MODEL,
             model_kwargs={'device': device, 'trust_remote_code': True},
             encode_kwargs={'normalize_embeddings': True}
         )
-        
         self.llm = ChatOllama(model=settings.LLM_MODEL, temperature=0)
-        
         self.llm_transformer = LLMGraphTransformer(
             llm=self.llm,
-            allowed_nodes=["Client", "Project", "Technology", "Requirement", "Budget", "Timeline", "Department", "Document"],
-            allowed_relationships=["ISSUED_BY", "REQUIRES", "HAS_BUDGET", "USED", "MENTIONS"],
+            allowed_nodes=["Entity", "Concept", "Person", "Place", "Event"],
+            allowed_relationships=["RELATION", "INCLUDES", "INVOLVES", "CAUSES"],
             strict_mode=False 
         )
 
     def clean_markdown(self, text: str) -> str:
-        """
-        [수정 2] 의미 없는 특수문자나 빈 표 테두리 제거
-        """
         lines = []
         for line in text.split('\n'):
             stripped = line.strip()
-            # 1. 빈 줄 패스
             if not stripped: continue
-            
-            # 2. | 또는 - 만으로 구성된 줄(표 테두리)인데 글자가 없는 경우 패스
-            # 예: |---|---| 또는 +---+
-            if re.match(r'^[|\-\+\s]+$', stripped):
-                continue
-            
+            if re.match(r'^[|\-+\s]+$', stripped): continue
             lines.append(line)
-        
         return '\n'.join(lines)
 
-    async def process_file(self, file: UploadFile, kb_id: str, user_id: int, chunk_size: int = 500):
+    async def process_file(self, file: UploadFile, kb_id: str, user_id: int):
+        # 1. 파일 임시 저장
         file_path = os.path.join(self.upload_dir, file.filename)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+            
+        return file_path
+
+    # ✅ 비동기 작업용 메서드 (Background Task)
+    async def process_file_background(self, file_path: str, filename: str, kb_id: str, user_id: int):
+        logger.info(f"🚀 [Async] Processing started: {filename}")
+        base_metadata = {
+            "source": filename,
+            "kb_id": kb_id,
+            "user_id": user_id,
+            "uploaded_at": datetime.datetime.now().isoformat(),
+        }
 
         try:
-            logger.info(f"Processing file: {file.filename} for User: {user_id}")
+            texts, metadatas, final_splits = [], [], []
             
-            # 문서 변환 (OCR 수행)
-            conversion_result = self.converter.convert(file_path)
-            doc = conversion_result.document
-            markdown_text = doc.export_to_markdown()
-            
-            # [수정 3] 추출된 텍스트 정제
-            cleaned_text = self.clean_markdown(markdown_text)
-            
-            if not cleaned_text.strip(): 
-                return False, "텍스트를 추출할 수 없습니다. (이미지 화질이 낮거나 글자가 없을 수 있음)"
+            # --- Strategy 1: Docling ---
+            try:
+                logger.info("Trying Docling...")
+                conversion_result = self.converter.convert(file_path)
+                doc = conversion_result.document
+                cleaned_text = self.clean_markdown(doc.export_to_markdown())
+                
+                if not cleaned_text.strip(): raise ValueError("Empty text")
+                
+                md_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=[("#", "H1"), ("##", "H2")])
+                splits = md_splitter.split_text(cleaned_text)
+                if not splits: splits = [Document(page_content=cleaned_text, metadata={})]
+                
+                text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+                final_splits = text_splitter.split_documents(splits)
+                
+            except Exception as e:
+                # --- Strategy 2: Fallback (PyPDFLoader) ---
+                logger.warning(f"Docling failed ({e}). Switching to Fallback.")
+                try:
+                    loader = PyPDFLoader(file_path)
+                    raw_docs = loader.load()
+                    full_text = self.clean_markdown("\n\n".join([d.page_content for d in raw_docs]))
+                    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+                    final_splits = text_splitter.create_documents([full_text])
+                except Exception as e2:
+                    logger.error(f"Fallback failed: {e2}")
+                    return
 
-            base_metadata = {
-                "source": file.filename,
-                "kb_id": kb_id,
-                "user_id": user_id,
-                "title": doc.name or file.filename,
-                "uploaded_at": datetime.datetime.now().isoformat(),
-            }
-
-            markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=[("#", "H1"), ("##", "H2")])
-            md_header_splits = markdown_splitter.split_text(cleaned_text)
-            
-            # 헤더가 없어서 통으로 들어간 경우 처리
-            if not md_header_splits:
-                md_header_splits = [Document(page_content=cleaned_text, metadata={})]
-
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=50)
-            final_splits = text_splitter.split_documents(md_header_splits)
-
+            # Metadata Update
             for idx, split in enumerate(final_splits):
                 split.metadata.update(base_metadata)
                 split.metadata["chunk_index"] = idx
 
-            texts = [split.page_content for split in final_splits]
-            metadatas = [split.metadata for split in final_splits]
-            
-            if not texts:
-                return False, "청킹 결과가 비어있습니다."
+            texts = [s.page_content for s in final_splits]
+            metadatas = [s.metadata for s in final_splits]
 
-            # DB 저장
+            # DB Save (Vector)
             await self.vector_service.add_documents(kb_id, texts, metadatas)
-            
-            # 그래프 저장 (일부만)
-            try:
-                subset_splits = final_splits[:3] 
-                graph_documents = self.llm_transformer.convert_to_graph_documents(subset_splits)
-                for graph_doc in graph_documents:
-                    graph_doc.source = Document(page_content="Source", metadata=base_metadata)
-                self.graph_service.add_graph_documents(graph_documents)
-            except Exception as e:
-                logger.warning(f"Graph extraction failed (non-fatal): {e}")
+            logger.info(f"✅ Vector Store Saved: {len(texts)} chunks")
 
-            return True, f"File processed successfully. (Extracted {len(texts)} chunks)"
+            # DB Save (Graph) - Limit 5 for speed
+            try:
+                subset = final_splits[:5]
+                graph_docs = self.llm_transformer.convert_to_graph_documents(subset)
+                for g in graph_docs: g.source = Document(page_content="Source", metadata=base_metadata)
+                self.graph_service.add_graph_documents(graph_docs)
+                logger.info("✅ Graph Store Saved")
+            except Exception as e:
+                logger.warning(f"Graph failed: {e}")
 
         except Exception as e:
-            logger.error(f"Ingestion Error: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return False, str(e)
+            logger.error(f"Fatal Error: {e}")
         finally:
             if os.path.exists(file_path): os.remove(file_path)

@@ -13,8 +13,8 @@ langchain
 langchain-community
 langchain-qdrant
 langchain-ollama
-langchain-huggingface # ✅ 추가됨
-sentence-transformers # ✅ 추가됨
+langchain-huggingface
+sentence-transformers
 langchain-experimental
 pypdf
 tiktoken
@@ -24,3 +24,5 @@ docling
 duckduckgo-search
 langgraph
 bcrypt<4.0.0
+geopy  # ✅ 좌표 변환용
+tabulate # ✅ SQL 결과 출력용
