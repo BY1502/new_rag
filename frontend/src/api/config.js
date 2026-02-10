@@ -1,6 +1,4 @@
-export const API_BASE_URL = "http://localhost:8000/api/v1";
+// API 설정 파일 - client.js로 통합됨
+// 하위 호환성을 위해 재내보내기
 
-export const getAuthHeader = () => {
-  const token = localStorage.getItem('rag_token');
-  return token ? { "Authorization": `Bearer ${token}` } : {};
-};
+export { getAuthHeader, API_BASE_URL } from './client.js';

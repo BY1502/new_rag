@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Database, Settings, Info, Save, Layers, Cpu } from '../../components/ui/Icon';
+import { X, Database, Settings, Info, Save, Layers, Cpu, Server } from '../../components/ui/Icon';
+import { externalServicesAPI } from '../../api/client';
 
 export default function KnowledgeBaseEditorModal({ isOpen, onClose, onSave, initialData = null }) {
   if (!isOpen) return null;
@@ -9,8 +10,10 @@ export default function KnowledgeBaseEditorModal({ isOpen, onClose, onSave, init
     description: '',
     embeddingModel: 'bge-m3',
     chunkSize: 512,
-    chunkOverlap: 50
+    chunkOverlap: 50,
+    externalServiceId: ''
   });
+  const [qdrantServices, setQdrantServices] = useState([]);
 
   useEffect(() => {
     if (initialData) {
@@ -19,13 +22,21 @@ export default function KnowledgeBaseEditorModal({ isOpen, onClose, onSave, init
         description: initialData.description || '',
         embeddingModel: initialData.config?.embeddingModel || 'bge-m3',
         chunkSize: initialData.config?.chunkSize || 512,
-        chunkOverlap: initialData.config?.chunkOverlap || 50
+        chunkOverlap: initialData.config?.chunkOverlap || 50,
+        externalServiceId: initialData.externalServiceId || ''
       });
     } else {
-      // 초기화
-      setFormData({ name: '', description: '', embeddingModel: 'bge-m3', chunkSize: 512, chunkOverlap: 50 });
+      setFormData({ name: '', description: '', embeddingModel: 'bge-m3', chunkSize: 512, chunkOverlap: 50, externalServiceId: '' });
     }
   }, [initialData, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    externalServicesAPI.list().then(res => {
+      const qdrant = (res.services || []).filter(s => s.service_type === 'qdrant');
+      setQdrantServices(qdrant);
+    });
+  }, [isOpen]);
 
   const handleSubmit = () => {
     if (!formData.name.trim()) return alert('지식 베이스 이름을 입력해주세요.');
@@ -145,6 +156,36 @@ export default function KnowledgeBaseEditorModal({ isOpen, onClose, onSave, init
               </div>
             </div>
           </section>
+
+          {/* 4. 벡터 DB 설정 */}
+          {qdrantServices.length > 0 && (
+            <section className="space-y-4">
+              <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2 border-b pb-2">
+                <Server size={16} className="text-gray-500"/> 벡터 DB 설정
+              </h4>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">Qdrant 서비스</label>
+                <div className="relative">
+                  <select
+                    value={formData.externalServiceId}
+                    onChange={(e) => setFormData({...formData, externalServiceId: e.target.value})}
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm appearance-none cursor-pointer hover:border-blue-400 transition"
+                  >
+                    <option value="">기본 (로컬 Qdrant)</option>
+                    {qdrantServices.map(svc => (
+                      <option key={svc.service_id} value={svc.service_id}>
+                        {svc.name} ({svc.url})
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-3 top-3 pointer-events-none text-gray-400">
+                    <Settings size={14} />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1.5 ml-1">문서 벡터를 저장할 Qdrant 서비스를 선택합니다. 외부 서비스 미선택 시 로컬 Qdrant를 사용합니다.</p>
+              </div>
+            </section>
+          )}
 
         </div>
 

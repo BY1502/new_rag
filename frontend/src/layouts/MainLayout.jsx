@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom'; // ✅ 라우터 훅 추가
 import { useStore } from '../contexts/StoreContext';
 import { useAuth } from '../contexts/AuthContext';
-import { MessageSquare, Plus, Database, Settings, Video, MoreHorizontal, Trash2, FileText as EditIcon, X, CheckCircle, Upload, Bot, Home, LogOut } from '../components/ui/Icon';
+import { MessageSquare, Plus, Database, Settings, Trash2, FileText as EditIcon, X, CheckCircle, Upload, Bot, Home, LogOut } from '../components/ui/Icon';
 import AdvancedSettings from '../features/settings/AdvancedSettings';
 import { Modal } from '../components/ui/Modal';
 
@@ -32,7 +32,6 @@ export default function MainLayout() {
     const path = location.pathname;
     if (path.includes('/home')) return { badge: 'Dashboard', badgeColor: 'bg-gray-100 text-gray-700 border-gray-200', status: 'Online', statusColor: 'bg-green-500' };
     if (path.includes('/knowledge')) return { badge: 'Knowledge OS', badgeColor: 'bg-purple-50 text-purple-700 border-purple-100', status: 'System Ready', statusColor: 'bg-purple-500' };
-    if (path.includes('/video')) return { badge: 'Live Vision Mode', badgeColor: 'bg-red-50 text-red-700 border-red-100', status: 'Recording', statusColor: 'bg-red-500 animate-pulse' };
     if (path.includes('/agent')) return { badge: 'Agent Manager', badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-100', status: 'Managing', statusColor: 'bg-indigo-500' };
     return { badge: 'Agent Mode', badgeColor: 'bg-blue-50 text-blue-700 border-blue-100', status: 'Online', statusColor: 'bg-green-500' };
   };
@@ -42,7 +41,7 @@ export default function MainLayout() {
   const isView = (path) => location.pathname.includes(path);
 
   return (
-    <div className="flex h-screen bg-gray-100 overflow-hidden font-sans relative">
+    <div className="flex h-screen bg-gray-100 dark:bg-gray-950 overflow-hidden font-sans relative">
       {/* 드래그 앤 드롭 오버레이 (기존 코드 유지) */}
       {isGlobalDragging && (
         <div className="fixed inset-0 z-[100] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center border-4 border-blue-500 border-dashed m-4 rounded-3xl animate-in fade-in duration-200 pointer-events-none">
@@ -54,7 +53,7 @@ export default function MainLayout() {
       {/* 사이드바 (기존 코드 100% 유지) */}
       <aside className="w-[260px] bg-gray-900 text-gray-300 flex flex-col shrink-0 transition-all duration-300">
         <div className="p-4">
-          <button onClick={createNewSession} className="w-full flex items-center gap-2 px-3 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition shadow-md">
+          <button onClick={() => { createNewSession(); navigate('/chat'); }} className="w-full flex items-center gap-2 px-3 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition shadow-md">
             <Plus size={18} /> <span className="text-sm font-semibold">새로운 대화</span>
           </button>
         </div>
@@ -88,7 +87,6 @@ export default function MainLayout() {
         <div className="p-4 border-t border-gray-800 space-y-2">
           <button onClick={() => navigate('/home')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ${isView('/home') ? 'bg-gray-800 text-white border border-gray-700' : 'hover:bg-gray-800 text-gray-200'}`}><Home size={18} /> <span>홈 (Dashboard)</span></button>
           <button onClick={() => navigate('/agent')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ${isView('/agent') ? 'bg-indigo-900/40 text-indigo-400 border border-indigo-800' : 'hover:bg-gray-800 text-gray-200'}`}><Bot size={18} /> <span>에이전트 관리</span></button>
-          <button onClick={() => navigate('/video')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ${isView('/video') ? 'bg-blue-900/40 text-blue-400 border border-blue-800' : 'hover:bg-gray-800 text-gray-200'}`}><Video size={18} /> <span>실시간 영상 분석</span></button>
           <button onClick={() => navigate('/knowledge')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ${isView('/knowledge') ? 'bg-purple-900/40 text-purple-400 border border-purple-800' : 'hover:bg-gray-800 text-gray-200'}`}><Database size={18} /> <span>지식 베이스 관리</span></button>
           {/* 설정 모달은 그대로 유지 */}
           <button onClick={() => setModalType('settings')} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-800 rounded-lg text-sm transition text-gray-200"><Settings size={18} /> <span>시스템 설정</span></button>
@@ -113,10 +111,10 @@ export default function MainLayout() {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col bg-white relative min-w-0">
-        <header className="h-14 border-b flex items-center justify-between px-6 bg-white/80 backdrop-blur-md sticky top-0 z-10">
+      <main className="flex-1 flex flex-col bg-white dark:bg-gray-900 relative min-w-0">
+        <header className="h-14 border-b dark:border-gray-800 flex items-center justify-between px-6 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md sticky top-0 z-10">
           <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition group" onClick={() => navigate('/home')} title="홈으로 이동">
-            <span className="font-bold text-gray-800 text-lg group-hover:text-blue-600 transition-colors">RAG AI</span>
+            <span className="font-bold text-gray-800 dark:text-gray-100 text-lg group-hover:text-blue-600 transition-colors">RAG AI</span>
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${headerInfo.badgeColor}`}>{headerInfo.badge}</span>
           </div>
           <div className="flex items-center gap-2 text-gray-400 text-xs">

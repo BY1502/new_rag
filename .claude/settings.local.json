@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd CLAUDE.md for Claude Code guidance\n\nProvides project overview, commands, architecture, and key data flows for future Claude Code instances.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(python -c:*)",
+      "Bash(pip install:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(C:\\\\Users\\\\USER\\\\anaconda3\\\\python.exe -m pip install:*)",
+      "Bash(curl:*)",
+      "Bash(\"C:\\\\Users\\\\USER\\\\anaconda3\\\\python.exe\" -c \"from neo4j import GraphDatabase; d = GraphDatabase.driver\\(''bolt://localhost:7687'', auth=\\(''neo4j'', ''password''\\)\\); d.verify_connectivity\\(\\); print\\(''SUCCESS''\\); d.close\\(\\)\")",
+      "Bash(\"C:\\\\Users\\\\USER\\\\anaconda3\\\\python.exe\":*)",
+      "Bash(docker-compose restart:*)",
+      "Bash(echo:*)",
+      "Bash(npm run build:*)",
+      "Bash(\"C:\\\\Users\\\\USER\\\\anaconda3\\\\python.exe\" -c:*)",
+      "Bash(del \"c:\\\\Users\\\\USER\\\\OneDrive - 호서대학교\\\\와이티\\\\rag_system\\\\frontend\\\\src\\\\components\\\\Sidebar.jsx\")"
+    ]
+  }
+}

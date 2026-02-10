@@ -7,16 +7,15 @@ import MainLayout from "./layouts/MainLayout";
 // 페이지 컴포넌트
 import HomeDashboard from "./features/home/HomeDashboard";
 import ChatInterface from "./features/chat/ChatInterface";
-import VideoAnalysis from "./features/video/VideoAnalysis";
 import AgentList from "./features/agent/AgentList";
 import KnowledgeManager from "./features/knowledge/KnowledgeManager";
 import AuthPage from "./features/auth/AuthPage";
-import Register from "./pages/Register"; // ✅ 회원가입 페이지 추가
+import Register from "./pages/Register";
 
 export default function App() {
   return (
-    <StoreProvider>
-      <AuthProvider>
+    <AuthProvider>
+      <StoreProvider>
         <BrowserRouter>
           <Routes>
             {/* 로그인 & 회원가입 (Public Routes) */}
@@ -28,19 +27,18 @@ export default function App() {
               <Route index element={<Navigate to="/home" replace />} />
               <Route path="home" element={<HomeDashboard />} />
               <Route path="chat" element={<ChatInterface />} />
-              <Route path="video" element={<VideoAnalysis />} />
-              
+
               {/* 스타일 유지를 위한 래퍼 포함 */}
               <Route path="agent" element={
-                <div className="flex-1 overflow-hidden p-6 bg-gray-50/50 h-full">
-                  <div className="h-full bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="flex-1 overflow-hidden p-6 bg-gray-50/50 dark:bg-gray-900 h-full">
+                  <div className="h-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                     <AgentList />
                   </div>
                 </div>
               } />
               <Route path="knowledge" element={
-                <div className="flex-1 overflow-hidden p-6 bg-gray-50/50 h-full">
-                  <div className="h-full bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="flex-1 overflow-hidden p-6 bg-gray-50/50 dark:bg-gray-900 h-full">
+                  <div className="h-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                     <KnowledgeManager />
                   </div>
                 </div>
@@ -51,7 +49,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </BrowserRouter>
-      </AuthProvider>
-    </StoreProvider>
+      </StoreProvider>
+    </AuthProvider>
   );
 }

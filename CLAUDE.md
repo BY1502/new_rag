@@ -4,11 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-WeKNORA RAG AI System - A full-stack Retrieval-Augmented Generation application with multi-agent capabilities, document knowledge bases, vector search, and knowledge graphs.
+RAG AI System - A full-stack Retrieval-Augmented Generation application with multi-agent capabilities, document knowledge bases, vector search, and knowledge graphs.
 
 ## Commands
 
 ### Frontend (React + Vite)
+
 ```bash
 cd frontend
 npm run dev      # Dev server on http://localhost:5173
@@ -16,6 +17,7 @@ npm run build    # Production build
 ```
 
 ### Backend (FastAPI)
+
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -23,9 +25,11 @@ uvicorn app.main:app --reload    # API server on http://localhost:8000
 ```
 
 ### Docker Services
+
 ```bash
 docker-compose -f backend/docker-compose.yml up -d
 ```
+
 Services: PostgreSQL (5432), Qdrant (6333), Redis (6379), Neo4j (7687), Portainer (9090)
 
 ## Architecture
@@ -85,6 +89,7 @@ Query → Agent router → Tool execution (logistics tools) → Streamed executi
 ## Environment Variables
 
 Backend `.env` requires:
+
 - `DATABASE_URL` - PostgreSQL connection
 - `QDRANT_URL` - Vector DB (default: http://localhost:6333)
 - `REDIS_URL` - Cache (default: redis://localhost:6379)

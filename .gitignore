@@ -4,5 +4,5 @@
 /.venv
 /backend/.env
 /frontend/node_modules
-/fix_2.js
-/fix_fb.js
+/backend/nul
+/nul
