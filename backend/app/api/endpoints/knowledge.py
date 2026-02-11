@@ -58,11 +58,15 @@ async def create_base(
         db, current_user.id, data.kb_id, data.name,
         data.description, data.chunk_size, data.chunk_overlap,
         external_service_id=data.external_service_id,
+        chunking_method=data.chunking_method,
+        semantic_threshold=data.semantic_threshold,
     )
     return KnowledgeBaseResponse(
         id=kb.id, kb_id=kb.kb_id, name=kb.name, description=kb.description or "",
         chunk_size=kb.chunk_size, chunk_overlap=kb.chunk_overlap,
         external_service_id=kb.external_service_id,
+        chunking_method=kb.chunking_method or "fixed",
+        semantic_threshold=kb.semantic_threshold or 0.75,
         file_count=0, created_at=kb.created_at, updated_at=kb.updated_at,
     )
 
@@ -81,6 +85,8 @@ async def get_base(
         id=kb.id, kb_id=kb.kb_id, name=kb.name, description=kb.description or "",
         chunk_size=kb.chunk_size, chunk_overlap=kb.chunk_overlap,
         external_service_id=kb.external_service_id,
+        chunking_method=kb.chunking_method or "fixed",
+        semantic_threshold=kb.semantic_threshold or 0.75,
         file_count=0, created_at=kb.created_at, updated_at=kb.updated_at,
     )
 
@@ -103,6 +109,8 @@ async def update_base(
         id=kb.id, kb_id=kb.kb_id, name=kb.name, description=kb.description or "",
         chunk_size=kb.chunk_size, chunk_overlap=kb.chunk_overlap,
         external_service_id=kb.external_service_id,
+        chunking_method=kb.chunking_method or "fixed",
+        semantic_threshold=kb.semantic_threshold or 0.75,
         file_count=0, created_at=kb.created_at, updated_at=kb.updated_at,
     )
 
@@ -168,6 +176,13 @@ async def upload_file(
     validate_file(file)
     ingestion_service = get_ingestion_service()
 
+    # KB 설정 조회 (chunking_method, semantic_threshold, chunk_size, chunk_overlap)
+    kb = await get_knowledge_base(db, current_user.id, kb_id)
+    chunk_size = kb.chunk_size if kb else settings.RAG_CHUNK_SIZE
+    chunk_overlap = kb.chunk_overlap if kb else settings.RAG_CHUNK_OVERLAP
+    chunking_method = (kb.chunking_method if kb else "fixed") or "fixed"
+    semantic_threshold = (kb.semantic_threshold if kb else 0.75) or 0.75
+
     # background task 전에 외부 client resolve (db session이 유효한 동안)
     ext_client = await resolve_qdrant_client(db, current_user.id, kb_id)
 
@@ -182,6 +197,10 @@ async def upload_file(
         original_filename,
         kb_id,
         current_user.id,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        chunking_method=chunking_method,
+        semantic_threshold=semantic_threshold,
         qdrant_client=ext_client,
     )
 

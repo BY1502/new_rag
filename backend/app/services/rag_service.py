@@ -131,7 +131,7 @@ class RAGService:
             # 2. MCP 도구 컨텍스트 수집
             tool_context = ""
             if active_mcp_ids:
-                tool_context = await self._execute_mcp_tools(message, active_mcp_ids, use_deep_think)
+                tool_context = await self._execute_mcp_tools(message, active_mcp_ids, use_deep_think, user_id, db)
                 if use_deep_think and tool_context:
                     yield json.dumps({
                         "type": "thinking",
@@ -478,29 +478,57 @@ class RAGService:
         self,
         message: str,
         active_mcp_ids: List[str],
-        use_deep_think: bool
+        use_deep_think: bool,
+        user_id: int = None,
+        db=None,
     ) -> str:
-        """MCP 도구 실행"""
+        """MCP 도구 실행 (내장 + MCP 서버 도구)"""
         if not active_mcp_ids:
             return ""
 
         from app.services.tool_registry import ToolRegistry
 
-        tools = ToolRegistry.get_tools(active_mcp_ids)
+        # DB에서 사용자의 MCP 서버 설정 조회
+        mcp_configs = []
+        if db and user_id:
+            try:
+                from sqlalchemy import select
+                from app.models.mcp_server import McpServer
+                stmt = select(McpServer).where(
+                    McpServer.user_id == user_id,
+                    McpServer.enabled == True,
+                )
+                result = await db.execute(stmt)
+                servers = result.scalars().all()
+                mcp_configs = [
+                    {
+                        "server_id": s.server_id,
+                        "server_type": s.server_type,
+                        "url": s.url,
+                        "command": s.command,
+                        "headers_json": s.headers_json,
+                    }
+                    for s in servers
+                ]
+            except Exception as e:
+                logger.warning(f"MCP 서버 설정 조회 실패: {e}")
+
+        # 비동기 도구 조회 (내장 + MCP)
+        tools = await ToolRegistry.get_tools_async(active_mcp_ids, mcp_configs)
         if not tools:
             logger.debug(f"No tools found for IDs: {active_mcp_ids}")
             return ""
 
         results = []
-        for tool in tools:
+        for t in tools:
             try:
-                tool_name = getattr(tool, 'name', str(tool))
-                logger.info(f"Executing MCP tool: {tool_name}")
-                result = tool.invoke(message)
+                tool_name = getattr(t, 'name', str(t))
+                logger.info(f"Executing tool: {tool_name}")
+                result = await t.ainvoke(message)
                 if result:
                     results.append(f"[{tool_name}] {result}")
             except Exception as e:
-                logger.warning(f"Tool execution failed ({tool}): {e}")
+                logger.warning(f"Tool execution failed ({t}): {e}")
 
         return "\n".join(results) if results else ""
 

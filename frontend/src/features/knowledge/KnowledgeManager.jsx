@@ -88,12 +88,7 @@ export default function KnowledgeManager() {
         updateFileStatusInKb(fileItem.id, 'processing');
         
         // API 호출
-        await uploadFileToBackend(
-          fileItem.rawFile, 
-          currentKbId, 
-          currentKb.config?.chunkSize || 512, 
-          currentKb.config?.chunkOverlap || 50
-        );
+        await uploadFileToBackend(fileItem.rawFile, currentKbId);
 
         updateFileStatusInKb(fileItem.id, 'ready');
       } catch (error) {
@@ -109,7 +104,7 @@ export default function KnowledgeManager() {
     setQdrantServices((res.services || []).filter(s => s.service_type === 'qdrant'));
   };
   const openCreateModal = () => { setKbForm({ name: '', description: '', chunkingMethod: 'fixed', chunkSize: 512, chunkOverlap: 50, semanticThreshold: 0.75, externalServiceId: '' }); fetchQdrantServices(); setIsCreateOpen(true); };
-  const openConfigModal = () => { if (!currentKb) return; setKbForm({ name: currentKb.name, description: currentKb.description, chunkingMethod: currentKb.config?.chunkingMethod || 'fixed', chunkSize: currentKb.config?.chunkSize || 512, chunkOverlap: currentKb.config?.chunkOverlap || 50, semanticThreshold: currentKb.config?.semanticThreshold || 0.75, externalServiceId: currentKb.externalServiceId || '' }); fetchQdrantServices(); setIsConfigOpen(true); };
+  const openConfigModal = () => { if (!currentKb) return; setKbForm({ name: currentKb.name, description: currentKb.description, chunkingMethod: currentKb.chunkingMethod || currentKb.config?.chunkingMethod || 'fixed', chunkSize: currentKb.chunkSize || currentKb.config?.chunkSize || 512, chunkOverlap: currentKb.chunkOverlap || currentKb.config?.chunkOverlap || 50, semanticThreshold: currentKb.semanticThreshold || currentKb.config?.semanticThreshold || 0.75, externalServiceId: currentKb.externalServiceId || '' }); fetchQdrantServices(); setIsConfigOpen(true); };
   
   const handleSaveKb = async (isNew) => {
     if (!kbForm.name.trim()) return alert('이름을 입력해주세요.');
@@ -117,13 +112,13 @@ export default function KnowledgeManager() {
     if (isNew) {
       const kbId = crypto.randomUUID();
       try {
-        await knowledgeAPI.createBase({ kb_id: kbId, name: kbForm.name, description: kbForm.description, chunk_size: kbForm.chunkSize, chunk_overlap: kbForm.chunkOverlap, external_service_id: kbForm.externalServiceId || null });
+        await knowledgeAPI.createBase({ kb_id: kbId, name: kbForm.name, description: kbForm.description, chunk_size: kbForm.chunkSize, chunk_overlap: kbForm.chunkOverlap, chunking_method: kbForm.chunkingMethod, semantic_threshold: kbForm.semanticThreshold, external_service_id: kbForm.externalServiceId || null });
       } catch (e) { console.error('KB create API failed:', e); }
       setKnowledgeBases(prev => [...prev, { id: kbId, files: [], created_at: new Date().toLocaleDateString(), ...newKbData }]);
       setIsCreateOpen(false);
     } else {
       try {
-        await knowledgeAPI.updateBase(currentKbId, { name: kbForm.name, description: kbForm.description, chunk_size: kbForm.chunkSize, chunk_overlap: kbForm.chunkOverlap, external_service_id: kbForm.externalServiceId || null });
+        await knowledgeAPI.updateBase(currentKbId, { name: kbForm.name, description: kbForm.description, chunk_size: kbForm.chunkSize, chunk_overlap: kbForm.chunkOverlap, chunking_method: kbForm.chunkingMethod, semantic_threshold: kbForm.semanticThreshold, external_service_id: kbForm.externalServiceId || null });
       } catch (e) { console.error('KB update API failed:', e); }
       setKnowledgeBases(prev => prev.map(kb => kb.id === currentKbId ? { ...kb, ...newKbData } : kb));
       setIsConfigOpen(false);
@@ -150,6 +145,7 @@ export default function KnowledgeManager() {
             <><div><div className="flex gap-3 bg-purple-50 border border-purple-100 p-3 rounded-lg text-xs text-purple-800 mb-2"><Info size={16} className="shrink-0 mt-0.5"/><p><strong>시멘틱 청킹이란?</strong><br/>텍스트의 의미가 급격히 변하는 지점을 찾아 문서를 나눕니다. 문맥이 끊기지 않아 검색 정확도가 높아집니다.</p></div><div><div className="flex justify-between mb-1"><label className="text-xs font-bold text-gray-600">Similarity Threshold</label><span className="text-xs font-mono bg-white px-1.5 rounded border">{kbForm.semanticThreshold}</span></div><input type="range" min="0.1" max="0.95" step="0.05" value={kbForm.semanticThreshold} onChange={e => setKbForm({...kbForm, semanticThreshold: Number(e.target.value)})} className="w-full h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-purple-600"/><p className="text-[10px] text-gray-400 mt-1 text-right">값이 높을수록 더 세밀하게 나뉩니다.</p></div></div></>
           )}
         </div>
+        <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 p-2.5 rounded-lg"><Info size={14} className="shrink-0"/><span>청킹 설정은 새로 업로드하는 파일에만 적용됩니다. 기존 파일은 영향받지 않습니다.</span></div>
       </div>
       {qdrantServices.length > 0 && (
         <div className="border-t border-gray-100 pt-4 space-y-4">

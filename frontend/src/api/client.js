@@ -178,27 +178,45 @@ export const streamChat = async (
 };
 
 /**
+ * 채팅 첨부 파일 텍스트 추출 API
+ */
+export const extractFileText = async (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetchWithTimeout(
+    `${API_BASE_URL}/chat/extract-text`,
+    {
+      method: "POST",
+      headers: { ...getAuthHeader() },
+      body: formData,
+    },
+    60000,
+  );
+
+  if (!response.ok) {
+    await handleApiError(response);
+  }
+
+  return await response.json();
+};
+
+/**
  * 파일 업로드 API (진행률 콜백 지원)
  *
  * @param {File} file - 업로드할 파일
  * @param {string} kbId - 지식 베이스 ID
- * @param {number} chunkSize - 청크 크기
- * @param {number} chunkOverlap - 청크 오버랩
  * @param {function} onProgress - 진행률 콜백 (0-100)
  * @returns {Promise<object>} 업로드 결과
  */
 export const uploadFileToBackend = async (
   file,
   kbId,
-  chunkSize,
-  chunkOverlap,
   onProgress = null,
 ) => {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("kb_id", kbId || "default_kb");
-  if (chunkSize) formData.append("chunk_size", chunkSize);
-  if (chunkOverlap) formData.append("chunk_overlap", chunkOverlap);
 
   // XMLHttpRequest를 사용하여 진행률 추적
   if (onProgress) {
@@ -1024,9 +1042,56 @@ export const externalServicesAPI = {
   },
 };
 
+export const mcpAPI = {
+  list: async () => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/settings/mcp-servers`,
+      { headers: { ...getAuthHeader(), "Content-Type": "application/json" } },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  create: async (serverData) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/settings/mcp-servers`,
+      {
+        method: "POST",
+        headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+        body: JSON.stringify(serverData),
+      },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  delete: async (serverId) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/settings/mcp-servers/${encodeURIComponent(serverId)}`,
+      { method: "DELETE", headers: { ...getAuthHeader() } },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  reorder: async (serverIds) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/settings/mcp-servers/reorder`,
+      {
+        method: "PUT",
+        headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+        body: JSON.stringify({ server_ids: serverIds }),
+      },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+};
+
 export default {
   streamChat,
   uploadFileToBackend,
+  extractFileText,
   authAPI,
   knowledgeAPI,
   healthAPI,
@@ -1034,6 +1099,7 @@ export default {
   agentsAPI,
   sessionsAPI,
   externalServicesAPI,
+  mcpAPI,
   getAuthHeader,
   API_BASE_URL,
   ApiError,

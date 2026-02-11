@@ -203,13 +203,15 @@ class IngestionService:
         user_id: int,
         chunk_size: Optional[int] = None,
         chunk_overlap: Optional[int] = None,
+        chunking_method: str = "fixed",
+        semantic_threshold: float = 0.75,
         qdrant_client=None,
     ):
         """
         백그라운드에서 파일을 처리합니다.
         처리 완료 후 임시 파일을 삭제합니다.
         """
-        logger.info(f"[Background] Processing started: {original_filename}")
+        logger.info(f"[Background] Processing started: {original_filename} (method={chunking_method})")
 
         # 설정값 또는 기본값 사용
         chunk_size = chunk_size or settings.RAG_CHUNK_SIZE
@@ -234,7 +236,9 @@ class IngestionService:
             final_splits = await self._parse_and_chunk(
                 file_path,
                 chunk_size,
-                chunk_overlap
+                chunk_overlap,
+                chunking_method=chunking_method,
+                semantic_threshold=semantic_threshold,
             )
 
             if not final_splits:
@@ -269,7 +273,9 @@ class IngestionService:
         self,
         file_path: str,
         chunk_size: int,
-        chunk_overlap: int
+        chunk_overlap: int,
+        chunking_method: str = "fixed",
+        semantic_threshold: float = 0.75,
     ) -> List[Document]:
         """문서 파싱 및 청킹"""
         final_splits = []
@@ -278,7 +284,6 @@ class IngestionService:
         if self.converter:
             try:
                 logger.info("Parsing with Docling...")
-                # CPU-bound 작업을 스레드풀에서 실행
                 loop = asyncio.get_event_loop()
                 conversion_result = await loop.run_in_executor(
                     None, self.converter.convert, file_path
@@ -287,7 +292,11 @@ class IngestionService:
                 cleaned_text = self.clean_markdown(doc.export_to_markdown())
 
                 if cleaned_text.strip():
-                    final_splits = self._split_text(cleaned_text, chunk_size, chunk_overlap)
+                    final_splits = self._split_text(
+                        cleaned_text, chunk_size, chunk_overlap,
+                        chunking_method=chunking_method,
+                        semantic_threshold=semantic_threshold,
+                    )
                     if final_splits:
                         return final_splits
 
@@ -298,19 +307,20 @@ class IngestionService:
         try:
             logger.info("Falling back to PyPDF...")
             loader = PyPDFLoader(file_path)
-
-            # CPU-bound 작업을 스레드풀에서 실행
             loop = asyncio.get_event_loop()
             raw_docs = await loop.run_in_executor(None, loader.load)
 
             full_text = self.clean_markdown("\n\n".join([d.page_content for d in raw_docs]))
 
             if full_text.strip():
-                text_splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=chunk_size,
-                    chunk_overlap=chunk_overlap
-                )
-                final_splits = text_splitter.create_documents([full_text])
+                if chunking_method == "semantic":
+                    final_splits = self._semantic_split(full_text, semantic_threshold)
+                else:
+                    text_splitter = RecursiveCharacterTextSplitter(
+                        chunk_size=chunk_size,
+                        chunk_overlap=chunk_overlap
+                    )
+                    final_splits = text_splitter.create_documents([full_text])
 
         except Exception as e:
             logger.error(f"PyPDF parsing failed: {e}")
@@ -321,10 +331,15 @@ class IngestionService:
         self,
         text: str,
         chunk_size: int,
-        chunk_overlap: int
+        chunk_overlap: int,
+        chunking_method: str = "fixed",
+        semantic_threshold: float = 0.75,
     ) -> List[Document]:
         """텍스트를 청크로 분할"""
-        # 마크다운 헤더 기반 분할 시도
+        if chunking_method == "semantic":
+            return self._semantic_split(text, semantic_threshold)
+
+        # 고정 크기: 마크다운 헤더 기반 분할 시도
         md_splitter = MarkdownHeaderTextSplitter(
             headers_to_split_on=[("#", "H1"), ("##", "H2"), ("###", "H3")]
         )
@@ -333,12 +348,42 @@ class IngestionService:
         if not splits:
             splits = [Document(page_content=text, metadata={})]
 
-        # 추가 분할
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap
         )
         return text_splitter.split_documents(splits)
+
+    def _semantic_split(
+        self,
+        text: str,
+        semantic_threshold: float = 0.75,
+    ) -> List[Document]:
+        """시맨틱 청킹: 의미 변화 지점에서 텍스트를 분할"""
+        try:
+            from langchain_experimental.text_splitter import SemanticChunker
+
+            embeddings = self.vector_service.embeddings
+            chunker = SemanticChunker(
+                embeddings=embeddings,
+                breakpoint_threshold_type="percentile",
+                breakpoint_threshold_amount=semantic_threshold * 100,
+            )
+            documents = chunker.create_documents([text])
+            logger.info(f"Semantic chunking produced {len(documents)} chunks")
+            return documents
+
+        except ImportError:
+            logger.warning("langchain_experimental not available, falling back to fixed-size chunking")
+        except Exception as e:
+            logger.warning(f"Semantic chunking failed: {e}, falling back to fixed-size chunking")
+
+        # 폴백: 고정 크기 분할
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=settings.RAG_CHUNK_SIZE,
+            chunk_overlap=settings.RAG_CHUNK_OVERLAP,
+        )
+        return text_splitter.create_documents([text])
 
     async def _save_to_graph(self, splits: List[Document], base_metadata: dict):
         """그래프 DB에 저장"""

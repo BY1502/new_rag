@@ -56,6 +56,13 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down...")
 
+    # MCP 연결 해제
+    try:
+        from app.services.tool_registry import ToolRegistry
+        await ToolRegistry.disconnect_all()
+    except Exception as e:
+        logger.warning(f"MCP cleanup error: {e}")
+
     # Redis 연결 해제
     await cache.disconnect()
 

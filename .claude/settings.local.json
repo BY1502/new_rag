@@ -16,7 +16,8 @@
       "Bash(echo:*)",
       "Bash(npm run build:*)",
       "Bash(\"C:\\\\Users\\\\USER\\\\anaconda3\\\\python.exe\" -c:*)",
-      "Bash(del \"c:\\\\Users\\\\USER\\\\OneDrive - 호서대학교\\\\와이티\\\\rag_system\\\\frontend\\\\src\\\\components\\\\Sidebar.jsx\")"
+      "Bash(del \"c:\\\\Users\\\\USER\\\\OneDrive - 호서대학교\\\\와이티\\\\rag_system\\\\frontend\\\\src\\\\components\\\\Sidebar.jsx\")",
+      "Bash(python -m pip install:*)"
     ]
   }
 }

@@ -3,7 +3,7 @@
 """
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class KnowledgeBaseCreate(BaseModel):
@@ -13,6 +13,15 @@ class KnowledgeBaseCreate(BaseModel):
     chunk_size: int = Field(512, ge=100, le=4096)
     chunk_overlap: int = Field(50, ge=0, le=500)
     external_service_id: Optional[str] = None
+    chunking_method: str = Field("fixed", description="fixed or semantic")
+    semantic_threshold: float = Field(0.75, ge=0.1, le=0.95)
+
+    @field_validator("chunking_method")
+    @classmethod
+    def validate_chunking_method(cls, v):
+        if v not in ("fixed", "semantic"):
+            raise ValueError("chunking_method must be 'fixed' or 'semantic'")
+        return v
 
 
 class KnowledgeBaseUpdate(BaseModel):
@@ -21,6 +30,15 @@ class KnowledgeBaseUpdate(BaseModel):
     chunk_size: Optional[int] = Field(None, ge=100, le=4096)
     chunk_overlap: Optional[int] = Field(None, ge=0, le=500)
     external_service_id: Optional[str] = None
+    chunking_method: Optional[str] = Field(None)
+    semantic_threshold: Optional[float] = Field(None, ge=0.1, le=0.95)
+
+    @field_validator("chunking_method")
+    @classmethod
+    def validate_chunking_method(cls, v):
+        if v is not None and v not in ("fixed", "semantic"):
+            raise ValueError("chunking_method must be 'fixed' or 'semantic'")
+        return v
 
 
 class KnowledgeFileResponse(BaseModel):
@@ -45,6 +63,8 @@ class KnowledgeBaseResponse(BaseModel):
     chunk_size: int
     chunk_overlap: int
     external_service_id: Optional[str] = None
+    chunking_method: str = "fixed"
+    semantic_threshold: float = 0.75
     file_count: int = 0
     created_at: datetime
     updated_at: datetime

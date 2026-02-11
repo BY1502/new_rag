@@ -29,4 +29,5 @@ geopy  # ✅ 좌표 변환용
 tabulate # ✅ SQL 결과 출력용
 pymysql # ✅ MySQL T2SQL 지원
 cryptography # ✅ API 키 Fernet 암호화
+mcp # ✅ MCP (Model Context Protocol) 클라이언트
 # pinecone # (optional) Pinecone VDB 사용 시: pip install pinecone langchain-pinecone

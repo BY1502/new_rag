@@ -8,7 +8,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=10000, description="채팅 메시지")
+    message: str = Field(..., min_length=1, max_length=50000, description="채팅 메시지 (첨부 파일 텍스트 포함 가능)")
     kb_ids: List[str] = Field(default=["default_kb"], description="지식 베이스 ID 목록 (다중 선택)")
     model: Optional[str] = Field(default=None, max_length=100, description="사용할 모델명")
     system_prompt: Optional[str] = Field(default=None, max_length=5000, description="에이전트 시스템 프롬프트")

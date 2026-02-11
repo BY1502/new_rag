@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from './AuthContext';
-import { settingsAPI, knowledgeAPI, agentsAPI, sessionsAPI } from '../api/client';
+import { settingsAPI, knowledgeAPI, agentsAPI, sessionsAPI, mcpAPI } from '../api/client';
 
 const StoreContext = createContext();
 
@@ -246,7 +246,11 @@ export function StoreProvider({ children }) {
           name: b.name,
           description: b.description || '',
           files: [],
-          config: { chunkSize: b.chunk_size, chunkOverlap: b.chunk_overlap },
+          config: { chunkSize: b.chunk_size, chunkOverlap: b.chunk_overlap, chunkingMethod: b.chunking_method || 'fixed', semanticThreshold: b.semantic_threshold || 0.75 },
+          chunkSize: b.chunk_size,
+          chunkOverlap: b.chunk_overlap,
+          chunkingMethod: b.chunking_method || 'fixed',
+          semanticThreshold: b.semantic_threshold || 0.75,
           file_count: b.file_count || 0,
           externalServiceId: b.external_service_id || '',
           created_at: b.created_at,
@@ -284,6 +288,24 @@ export function StoreProvider({ children }) {
         setSessions(mapped);
         setCurrentSessionId(mapped[0].id);
       }
+
+      // MCP 서버 목록 로드
+      try {
+        const mcpResult = await mcpAPI.list();
+        if (mcpResult.servers && mcpResult.servers.length > 0) {
+          const mapped = mcpResult.servers.map(s => ({
+            id: s.server_id,
+            name: s.name,
+            type: s.server_type,
+            url: s.url || '',
+            command: s.command || '',
+            headers_json: s.headers_json || '',
+            enabled: s.enabled,
+            status: 'connected',
+          }));
+          setMcpServers(mapped);
+        }
+      } catch { /* MCP 로드 실패 시 localStorage 폴백 유지 */ }
 
       settingsSyncedRef.current = true;
     })();
@@ -391,17 +413,37 @@ export function StoreProvider({ children }) {
     setApiKeys(prev => prev.filter(k => k.id !== id));
   }, []);
 
-  const addMcpServer = useCallback((server) => {
-    setMcpServers(prev => [...prev, {
-      id: crypto.randomUUID(),
+  const addMcpServer = useCallback(async (server) => {
+    const serverId = crypto.randomUUID();
+    const newServer = {
+      id: serverId,
       status: 'connected',
       enabled: true,
       ...server
-    }]);
+    };
+    setMcpServers(prev => [...prev, newServer]);
+    try {
+      await mcpAPI.create({
+        server_id: serverId,
+        name: server.name,
+        server_type: server.type || 'sse',
+        url: server.url || '',
+        command: server.command || '',
+        headers_json: server.headers_json || '',
+        enabled: true,
+      });
+    } catch (e) {
+      console.error('MCP 서버 백엔드 저장 실패:', e);
+    }
   }, []);
 
-  const deleteMcpServer = useCallback((id) => {
+  const deleteMcpServer = useCallback(async (id) => {
     setMcpServers(prev => prev.filter(s => s.id !== id));
+    try {
+      await mcpAPI.delete(id);
+    } catch (e) {
+      console.error('MCP 서버 백엔드 삭제 실패:', e);
+    }
   }, []);
 
   const reorderMcpServer = useCallback((index, direction) => {

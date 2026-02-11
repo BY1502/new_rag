@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import { useStore } from "../../contexts/StoreContext";
-import { streamChat, settingsAPI } from "../../api/client";
+import { streamChat, settingsAPI, extractFileText } from "../../api/client";
 import {
   Bot,
   User,
@@ -55,6 +55,7 @@ export default function ChatInterface() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [files, setFiles] = useState([]);
+  const [isExtractingFiles, setIsExtractingFiles] = useState(false);
 
   // UI 상태
   const [isAgentMenuOpen, setIsAgentMenuOpen] = useState(false);
@@ -163,6 +164,51 @@ export default function ChatInterface() {
 
     const activeSessionId = currentSessionId;
 
+    // 파일 텍스트 추출
+    const TEXT_EXTENSIONS = [".txt", ".md", ".csv"];
+    let fileTexts = [];
+    const currentFiles = [...files];
+
+    if (currentFiles.length > 0) {
+      setIsExtractingFiles(true);
+      try {
+        const extractionPromises = currentFiles.map(async (file) => {
+          const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+          if (TEXT_EXTENSIONS.includes(ext)) {
+            // 텍스트 파일: 클라이언트에서 직접 읽기
+            return new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (e) => resolve({ filename: file.name, text: e.target.result });
+              reader.onerror = () => resolve({ filename: file.name, text: "" });
+              reader.readAsText(file);
+            });
+          } else {
+            // 바이너리 파일: 서버에서 추출
+            try {
+              return await extractFileText(file);
+            } catch {
+              return { filename: file.name, text: "" };
+            }
+          }
+        });
+        fileTexts = await Promise.all(extractionPromises);
+      } finally {
+        setIsExtractingFiles(false);
+      }
+    }
+
+    // 파일 텍스트를 쿼리에 병합
+    let augmentedQuery = query;
+    const validTexts = fileTexts.filter((ft) => ft.text?.trim());
+    if (validTexts.length > 0) {
+      const fileSection = validTexts
+        .map((ft) => `[첨부 파일: ${ft.filename}]\n${ft.text}`)
+        .join("\n\n");
+      augmentedQuery = validTexts.length > 0 && query.trim()
+        ? `${query}\n\n---\n${fileSection}`
+        : fileSection || query;
+    }
+
     if (!retryQuery) {
       const currentSession = sessions.find((s) => s.id === currentSessionId);
       if (currentSession && currentSession.messages.length === 0) {
@@ -173,7 +219,7 @@ export default function ChatInterface() {
       addMessage({
         role: "user",
         text: query,
-        attachments: files.map((f) => ({ name: f.name })),
+        attachments: currentFiles.map((f) => ({ name: f.name })),
       });
       setInput("");
       setFiles([]);
@@ -207,7 +253,7 @@ export default function ChatInterface() {
 
       await streamChat(
         {
-          query: query,
+          query: augmentedQuery,
           model: config.llm || currentAgent?.model,
           kb_ids: selectedKbIds,
           web_search: useWebSearch,
@@ -585,6 +631,7 @@ export default function ChatInterface() {
                 <input
                   type="file"
                   multiple
+                  accept=".pdf,.docx,.doc,.txt,.md,.pptx,.xlsx,.csv"
                   className="hidden"
                   ref={fileInputRef}
                   onChange={handleFileSelect}
@@ -783,19 +830,21 @@ export default function ChatInterface() {
               </div>
               <button
                 onClick={() => handleSend()}
-                disabled={(!input.trim() && files.length === 0) || isTyping}
+                disabled={(!input.trim() && files.length === 0) || isTyping || isExtractingFiles}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-sm ${
-                  (input.trim() || files.length > 0) && !isTyping
+                  (input.trim() || files.length > 0) && !isTyping && !isExtractingFiles
                     ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow"
                     : "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
                 }`}
               >
-                {isTyping ? (
+                {isExtractingFiles ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : isTyping ? (
                   <Loader2 size={16} className="animate-spin" />
                 ) : (
                   <Send size={16} fill="currentColor" />
                 )}
-                <span className="hidden sm:inline">전송</span>
+                <span className="hidden sm:inline">{isExtractingFiles ? "분석 중" : "전송"}</span>
               </button>
             </div>
           </div>

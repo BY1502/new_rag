@@ -2,7 +2,7 @@
 지식 베이스 + 파일 메타데이터 모델
 """
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, ForeignKey, UniqueConstraint
+    Column, Integer, String, Text, DateTime, Float, ForeignKey, UniqueConstraint
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -23,6 +23,8 @@ class KnowledgeBase(Base):
     chunk_size = Column(Integer, default=512)
     chunk_overlap = Column(Integer, default=50)
     external_service_id = Column(String(100), nullable=True, default=None)
+    chunking_method = Column(String(20), default="fixed")       # fixed | semantic
+    semantic_threshold = Column(Float, default=0.75)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

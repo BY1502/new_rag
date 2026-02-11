@@ -31,6 +31,8 @@ async def list_knowledge_bases(db: AsyncSession, user_id: int) -> List[dict]:
             "chunk_size": kb.chunk_size,
             "chunk_overlap": kb.chunk_overlap,
             "external_service_id": kb.external_service_id,
+            "chunking_method": kb.chunking_method or "fixed",
+            "semantic_threshold": kb.semantic_threshold or 0.75,
             "file_count": file_count,
             "created_at": kb.created_at,
             "updated_at": kb.updated_at,
@@ -52,7 +54,9 @@ async def get_knowledge_base(db: AsyncSession, user_id: int, kb_id: str) -> Opti
 async def create_knowledge_base(db: AsyncSession, user_id: int, kb_id: str, name: str,
                                  description: str = "", chunk_size: int = 512,
                                  chunk_overlap: int = 50,
-                                 external_service_id: str = None) -> KnowledgeBase:
+                                 external_service_id: str = None,
+                                 chunking_method: str = "fixed",
+                                 semantic_threshold: float = 0.75) -> KnowledgeBase:
     """KB를 생성합니다."""
     kb = KnowledgeBase(
         kb_id=kb_id,
@@ -62,6 +66,8 @@ async def create_knowledge_base(db: AsyncSession, user_id: int, kb_id: str, name
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         external_service_id=external_service_id,
+        chunking_method=chunking_method,
+        semantic_threshold=semantic_threshold,
     )
     db.add(kb)
     await db.commit()
