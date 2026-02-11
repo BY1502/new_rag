@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import { useStore } from "../../contexts/StoreContext";
-import { streamChat, settingsAPI, extractFileText } from "../../api/client";
+import { streamChat, settingsAPI, extractFileText, feedbackAPI } from "../../api/client";
 import {
   Bot,
   User,
@@ -22,6 +22,8 @@ import {
   Copy,
   RotateCw,
   HardDrive,
+  ThumbsUp,
+  ThumbsDown,
 } from "../../components/ui/Icon";
 
 const AgentIcon = ({ agentId, size = 12, className = "" }) => {
@@ -349,6 +351,41 @@ export default function ChatInterface() {
     setTimeout(() => setCopiedId(null), 1500);
   };
 
+  const handleFeedback = async (msgIndex, isPositive) => {
+    try {
+      const messages = currentMessages;
+      if (msgIndex < 0 || msgIndex >= messages.length) return;
+
+      const aiMsg = messages[msgIndex];
+      const userMsg = msgIndex > 0 ? messages[msgIndex - 1] : null;
+
+      if (!userMsg || aiMsg.role !== "assistant") return;
+
+      await feedbackAPI.create({
+        session_id: currentSessionId,
+        message_index: msgIndex,
+        user_message: userMsg.text,
+        ai_message: aiMsg.text,
+        is_positive: isPositive,
+        agent_id: currentAgent?.id,
+        model_name: currentAgent?.model || config.llm,
+        kb_ids: JSON.stringify(selectedKbIds),
+        used_web_search: useWebSearch,
+        used_deep_think: useDeepThink,
+      });
+
+      // 메시지에 피드백 상태 표시
+      const updatedMessages = [...messages];
+      updatedMessages[msgIndex] = {
+        ...updatedMessages[msgIndex],
+        feedback: { is_positive: isPositive },
+      };
+      updateSessionMessages(currentSessionId, updatedMessages);
+    } catch (error) {
+      console.error("피드백 저장 실패:", error);
+    }
+  };
+
   // 활성 기능 요약
   const activeFeatures = [];
   if (useWebSearch) activeFeatures.push("웹 검색");
@@ -410,7 +447,10 @@ export default function ChatInterface() {
             {currentMessages.map((msg, idx) => (
               <MessageBubble
                 key={msg.id}
-                msg={msg}
+                msg={{
+                  ...msg,
+                  onFeedback: msg.role === "assistant" ? (isPositive) => handleFeedback(idx, isPositive) : null,
+                }}
                 isLast={idx === currentMessages.length - 1}
                 isStreaming={isTyping && idx === currentMessages.length - 1 && msg.role === "assistant"}
                 copiedId={copiedId}
@@ -989,6 +1029,29 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
                     title="재생성"
                   >
                     <RotateCw size={12} />
+                  </button>
+                  <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" />
+                  <button
+                    onClick={() => msg.onFeedback && msg.onFeedback(true)}
+                    className={`p-1.5 rounded-lg transition ${
+                      msg.feedback?.is_positive === true
+                        ? "text-green-600 bg-green-50 dark:bg-green-900/30"
+                        : "text-gray-400 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-900/30"
+                    }`}
+                    title="좋아요"
+                  >
+                    <ThumbsUp size={12} />
+                  </button>
+                  <button
+                    onClick={() => msg.onFeedback && msg.onFeedback(false)}
+                    className={`p-1.5 rounded-lg transition ${
+                      msg.feedback?.is_positive === false
+                        ? "text-red-600 bg-red-50 dark:bg-red-900/30"
+                        : "text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"
+                    }`}
+                    title="싫어요"
+                  >
+                    <ThumbsDown size={12} />
                   </button>
                 </div>
               )}

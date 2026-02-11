@@ -22,6 +22,7 @@ import app.models.chat_session  # noqa: F401
 import app.models.mcp_server  # noqa: F401
 import app.models.db_connection  # noqa: F401
 import app.models.external_service  # noqa: F401
+import app.models.conversation_feedback  # noqa: F401
 
 # 로깅 설정
 logging.basicConfig(

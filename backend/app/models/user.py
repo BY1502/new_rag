@@ -22,3 +22,6 @@ class User(Base):
     mcp_servers = relationship("McpServer", back_populates="user", cascade="all, delete-orphan")
     db_connections = relationship("DbConnection", back_populates="user", cascade="all, delete-orphan")
     external_services = relationship("ExternalService", back_populates="user", cascade="all, delete-orphan")
+    conversation_feedbacks = relationship("ConversationFeedback", back_populates="user", cascade="all, delete-orphan")
+    training_datasets = relationship("TrainingDataset", back_populates="user", cascade="all, delete-orphan")
+    finetuning_jobs = relationship("FineTuningJob", back_populates="user", cascade="all, delete-orphan")

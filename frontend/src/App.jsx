@@ -9,6 +9,8 @@ import HomeDashboard from "./features/home/HomeDashboard";
 import ChatInterface from "./features/chat/ChatInterface";
 import AgentList from "./features/agent/AgentList";
 import KnowledgeManager from "./features/knowledge/KnowledgeManager";
+import DatasetManager from "./features/training/DatasetManager";
+import FineTuningMonitor from "./features/training/FineTuningMonitor";
 import AuthPage from "./features/auth/AuthPage";
 import Register from "./pages/Register";
 
@@ -43,6 +45,8 @@ export default function App() {
                   </div>
                 </div>
               } />
+              <Route path="training" element={<DatasetManager />} />
+              <Route path="finetuning" element={<FineTuningMonitor />} />
             </Route>
 
             {/* 그 외 경로는 로그인으로 */}

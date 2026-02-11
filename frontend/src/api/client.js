@@ -1088,6 +1088,185 @@ export const mcpAPI = {
   },
 };
 
+export const feedbackAPI = {
+  create: async (feedbackData) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/training/feedback`,
+      {
+        method: "POST",
+        headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+        body: JSON.stringify(feedbackData),
+      },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  list: async (params = {}) => {
+    const queryParams = new URLSearchParams();
+    if (params.session_id) queryParams.append("session_id", params.session_id);
+    if (params.min_rating) queryParams.append("min_rating", params.min_rating);
+    if (params.only_positive !== undefined) queryParams.append("only_positive", params.only_positive);
+    if (params.skip) queryParams.append("skip", params.skip);
+    if (params.limit) queryParams.append("limit", params.limit);
+
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/training/feedback?${queryParams}`,
+      { headers: { ...getAuthHeader() } },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  update: async (feedbackId, updateData) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/training/feedback/${feedbackId}`,
+      {
+        method: "PUT",
+        headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  delete: async (feedbackId) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/training/feedback/${feedbackId}`,
+      { method: "DELETE", headers: { ...getAuthHeader() } },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+};
+
+export const datasetAPI = {
+  create: async (datasetData) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/training/datasets`,
+      {
+        method: "POST",
+        headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+        body: JSON.stringify(datasetData),
+      },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  list: async () => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/training/datasets`,
+      { headers: { ...getAuthHeader() } },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  get: async (datasetId) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/training/datasets/${datasetId}`,
+      { headers: { ...getAuthHeader() } },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  delete: async (datasetId) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/training/datasets/${datasetId}`,
+      { method: "DELETE", headers: { ...getAuthHeader() } },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  build: async (datasetId) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/training/datasets/${datasetId}/build`,
+      {
+        method: "POST",
+        headers: { ...getAuthHeader() },
+      },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  export: async (datasetId, format = "chat") => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/training/datasets/${datasetId}/export?format=${format}`,
+      { headers: { ...getAuthHeader() } },
+    );
+    if (!response.ok) await handleApiError(response);
+
+    // 파일 다운로드
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `dataset_${datasetId}_${format}.jsonl`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+
+    return { success: true };
+  },
+};
+
+export const finetuningAPI = {
+  createJob: async (jobData) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/finetuning/jobs`,
+      {
+        method: "POST",
+        headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+        body: JSON.stringify(jobData),
+      },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  listJobs: async () => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/finetuning/jobs`,
+      { headers: { ...getAuthHeader() } },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  getJob: async (jobId) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/finetuning/jobs/${encodeURIComponent(jobId)}`,
+      { headers: { ...getAuthHeader() } },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  cancelJob: async (jobId) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/finetuning/jobs/${encodeURIComponent(jobId)}`,
+      { method: "DELETE", headers: { ...getAuthHeader() } },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  listModels: async () => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/finetuning/models`,
+      { headers: { ...getAuthHeader() } },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+};
+
 export default {
   streamChat,
   uploadFileToBackend,
@@ -1100,6 +1279,9 @@ export default {
   sessionsAPI,
   externalServicesAPI,
   mcpAPI,
+  feedbackAPI,
+  datasetAPI,
+  finetuningAPI,
   getAuthHeader,
   API_BASE_URL,
   ApiError,
