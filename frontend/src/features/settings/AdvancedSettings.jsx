@@ -525,6 +525,115 @@ export default function AdvancedSettings() {
               <input type="range" min="3" max="10" value={localConfig.searchTopK || 5} onChange={(e) => setLocalConfig({...localConfig, searchTopK: Number(e.target.value)})} className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg accent-blue-600 cursor-pointer"/>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">이 값은 채팅 시 벡터 검색 결과 개수에도 적용됩니다.</p>
             </section>
+
+            {/* 검색 모드 선택 */}
+            <section className="space-y-3">
+              <label className="block text-sm font-bold text-gray-800 dark:text-gray-200">검색 모드</label>
+              <div className="space-y-2">
+                {/* Hybrid (권장) */}
+                <div
+                  onClick={() => setLocalConfig({...localConfig, searchMode: 'hybrid'})}
+                  className={`p-4 rounded-lg border-2 cursor-pointer transition ${
+                    localConfig.searchMode === 'hybrid'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-2xl">🎯</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">
+                      하이브리드 검색 (권장)
+                    </span>
+                    {localConfig.searchMode === 'hybrid' && (
+                      <span className="ml-auto text-xs px-2 py-0.5 bg-blue-600 text-white rounded-full">
+                        선택됨
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 ml-10">
+                    의미 검색 + 키워드 검색 융합 (RRF) — 가장 정확한 결과
+                  </p>
+                </div>
+
+                {/* Dense */}
+                <div
+                  onClick={() => setLocalConfig({...localConfig, searchMode: 'dense'})}
+                  className={`p-4 rounded-lg border-2 cursor-pointer transition ${
+                    localConfig.searchMode === 'dense'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-2xl">🧠</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">
+                      의미 검색 (Dense Vector)
+                    </span>
+                    {localConfig.searchMode === 'dense' && (
+                      <span className="ml-auto text-xs px-2 py-0.5 bg-blue-600 text-white rounded-full">
+                        선택됨
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 ml-10">
+                    문맥 이해 중심, 유사한 의미 파악 (현재 기본 방식)
+                  </p>
+                </div>
+
+                {/* Sparse */}
+                <div
+                  onClick={() => setLocalConfig({...localConfig, searchMode: 'sparse'})}
+                  className={`p-4 rounded-lg border-2 cursor-pointer transition ${
+                    localConfig.searchMode === 'sparse'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-2xl">🔍</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">
+                      키워드 검색 (BM25)
+                    </span>
+                    {localConfig.searchMode === 'sparse' && (
+                      <span className="ml-auto text-xs px-2 py-0.5 bg-blue-600 text-white rounded-full">
+                        선택됨
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 ml-10">
+                    정확한 용어 매칭, 기술 문서/API 레퍼런스 검색에 유리
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <label className="block text-sm font-bold text-gray-800 dark:text-gray-200">멀티모달 검색 (CLIP)</label>
+              <div
+                onClick={() => setLocalConfig({...localConfig, useMultimodalSearch: !localConfig.useMultimodalSearch})}
+                className={`p-4 rounded-lg border-2 cursor-pointer transition ${
+                  localConfig.useMultimodalSearch
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-2xl">🖼️</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    멀티모달 검색 활성화
+                  </span>
+                  {localConfig.useMultimodalSearch && (
+                    <span className="ml-auto text-xs px-2 py-0.5 bg-purple-600 text-white rounded-full">
+                      활성화됨
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 ml-10">
+                  CLIP 모델로 텍스트↔이미지 크로스 검색. PDF의 이미지, 직접 업로드한 이미지를 검색 결과에 포함합니다.
+                </p>
+              </div>
+            </section>
+
             <section>
               <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 mb-2">Vector DB (Qdrant)</label>
               <div className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-gray-800 font-mono text-gray-600 dark:text-gray-400">{backendConfig?.qdrant_url || (backendLoading ? '로딩 중...' : 'http://localhost:6333')}</div>

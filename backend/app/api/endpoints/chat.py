@@ -52,8 +52,11 @@ async def chat_stream(
             top_k=request.top_k,
             use_rerank=request.use_rerank,
             search_provider=request.search_provider,
+            search_mode=request.search_mode,
+            images=request.images,
             use_sql=request.use_sql,
             db_connection_id=request.db_connection_id,
+            use_multimodal_search=request.use_multimodal_search,
             db=db
         ),
         media_type="text/event-stream"

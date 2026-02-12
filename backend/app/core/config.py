@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     # 파일 업로드 설정
     # ============================================================
     MAX_UPLOAD_SIZE_MB: int = Field(default=50, ge=1, le=500)
-    ALLOWED_FILE_EXTENSIONS: str = ".pdf,.docx,.doc,.txt,.md,.pptx,.xlsx"
+    ALLOWED_FILE_EXTENSIONS: str = ".pdf,.docx,.doc,.txt,.md,.pptx,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
 
     @property
     def allowed_extensions_list(self) -> List[str]:
@@ -129,6 +129,10 @@ class Settings(BaseSettings):
         default="BAAI/bge-m3",
         description="임베딩 모델명"
     )
+    CLIP_MODEL: str = Field(
+        default="openai/clip-vit-base-patch32",
+        description="CLIP 멀티모달 임베딩 모델명"
+    )
     LLM_MODEL: str = Field(
         default="llama3.1",
         description="기본 LLM 모델명"
@@ -142,6 +146,23 @@ class Settings(BaseSettings):
     RAG_TOP_K: int = Field(default=5, ge=1, le=20, description="검색 결과 개수")
     RAG_CHUNK_SIZE: int = Field(default=500, ge=100, le=4000, description="청크 크기")
     RAG_CHUNK_OVERLAP: int = Field(default=50, ge=0, le=500, description="청크 오버랩")
+
+    # ============================================================
+    # 이미지 저장 설정
+    # ============================================================
+    IMAGE_STORAGE_DIR: str = Field(
+        default="backend/storage/images",
+        description="이미지 파일 저장 디렉토리"
+    )
+
+    # ============================================================
+    # 멀티모달 성능 최적화
+    # ============================================================
+    CLIP_BATCH_SIZE: int = Field(default=8, description="CLIP 임베딩 배치 크기")
+    CAPTION_BATCH_SIZE: int = Field(default=4, description="캡셔닝 배치 크기")
+    ENABLE_THUMBNAIL: bool = Field(default=True, description="썸네일 생성 활성화")
+    ENABLE_OCR: bool = Field(default=True, description="OCR 활성화")
+    ENABLE_CAPTIONING: bool = Field(default=True, description="이미지 캡셔닝 활성화")
 
     # ============================================================
     # 로깅 설정

@@ -24,6 +24,7 @@ class HybridRetriever(BaseRetriever):
 
     stores: List[Any]  # List[BaseVectorStore]
     top_k: int = 4
+    search_mode: str = "hybrid"  # "dense" | "sparse" | "hybrid"
 
     class Config:
         arbitrary_types_allowed = True
@@ -34,8 +35,17 @@ class HybridRetriever(BaseRetriever):
         *,
         run_manager: Optional[AsyncCallbackManagerForRetrieverRun] = None,
     ) -> List[Document]:
-        """비동기 다중 소스 병렬 검색"""
-        tasks = [store.search(query, top_k=self.top_k) for store in self.stores]
+        """비동기 다중 소스 병렬 검색 - search_mode에 따라 적절한 메서드 호출"""
+        tasks = []
+        for store in self.stores:
+            if self.search_mode == "hybrid" and hasattr(store, "hybrid_search"):
+                tasks.append(store.hybrid_search(query, top_k=self.top_k))
+            elif self.search_mode == "sparse" and hasattr(store, "sparse_search"):
+                tasks.append(store.sparse_search(query, top_k=self.top_k))
+            else:
+                # 기본 dense search
+                tasks.append(store.search(query, top_k=self.top_k))
+
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         all_docs: List[Document] = []

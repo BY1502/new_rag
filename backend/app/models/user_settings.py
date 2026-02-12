@@ -20,6 +20,8 @@ class UserSettings(Base):
     retrieval_mode = Column(String(20), default="hybrid")
     search_top_k = Column(Integer, default=5)
     use_rerank = Column(Boolean, default=True)
+    search_mode = Column(String(20), default="hybrid")  # dense, sparse, hybrid
+    use_multimodal_search = Column(Boolean, default=False)  # CLIP 멀티모달 검색
     system_prompt = Column(Text, nullable=True)
 
     # UI 설정

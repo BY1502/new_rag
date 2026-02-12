@@ -53,9 +53,13 @@ class RetrieverFactory:
         kb_id: str,
         top_k: int = 4,
         db: Optional[AsyncSession] = None,
+        search_mode: str = "hybrid",
     ) -> BaseRetriever:
         """
         KB + 사용자 설정에 따른 Retriever 반환.
+
+        Args:
+            search_mode: "dense" (의미 검색), "sparse" (키워드 검색), "hybrid" (융합 검색)
 
         Returns:
             단일 소스면 VectorStoreRetrieverAdapter,
@@ -98,12 +102,20 @@ class RetrieverFactory:
             except Exception as e:
                 logger.warning(f"Source C (user default VDB) failed: {e}")
 
+        # 검색 메서드 결정
+        if search_mode == "sparse":
+            retriever_method = "sparse_search"
+        elif search_mode == "hybrid":
+            retriever_method = "hybrid_search"
+        else:  # dense
+            retriever_method = "search"
+
         # 1개면 단일 retriever, 2+개면 HybridRetriever
         if len(stores) == 1:
-            return stores[0].as_retriever(top_k=top_k)
+            return stores[0].as_retriever(top_k=top_k, search_method=retriever_method)
 
-        logger.info(f"HybridRetriever with {len(stores)} sources for KB '{kb_id}'")
-        return HybridRetriever(stores=stores, top_k=top_k)
+        logger.info(f"HybridRetriever with {len(stores)} sources for KB '{kb_id}' (mode: {search_mode})")
+        return HybridRetriever(stores=stores, top_k=top_k, search_mode=search_mode)
 
     async def _resolve_user_default_vdb(
         self,

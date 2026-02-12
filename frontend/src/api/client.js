@@ -100,7 +100,7 @@ const fetchWithTimeout = async (url, options, timeout = REQUEST_TIMEOUT) => {
  * 스트리밍 채팅 API
  */
 export const streamChat = async (
-  { query, model, kb_ids, web_search, use_deep_think, active_mcp_ids, system_prompt, history, top_k, use_rerank, search_provider, use_sql, db_connection_id },
+  { query, model, kb_ids, web_search, use_deep_think, active_mcp_ids, system_prompt, history, top_k, use_rerank, search_provider, search_mode, images, use_sql, db_connection_id },
   onChunk,
   onComplete,
   abortController,
@@ -124,6 +124,8 @@ export const streamChat = async (
         top_k: top_k || null,
         use_rerank: use_rerank || false,
         search_provider: search_provider || null,
+        search_mode: search_mode || 'hybrid',
+        images: images || [],
         use_sql: use_sql || false,
         db_connection_id: db_connection_id || null,
       }),

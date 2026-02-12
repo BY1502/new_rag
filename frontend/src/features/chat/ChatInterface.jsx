@@ -166,9 +166,11 @@ export default function ChatInterface() {
 
     const activeSessionId = currentSessionId;
 
-    // 파일 텍스트 추출
+    // 파일 텍스트/이미지 추출
     const TEXT_EXTENSIONS = [".txt", ".md", ".csv"];
+    const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"];
     let fileTexts = [];
+    let imageBase64List = [];
     const currentFiles = [...files];
 
     if (currentFiles.length > 0) {
@@ -176,27 +178,63 @@ export default function ChatInterface() {
       try {
         const extractionPromises = currentFiles.map(async (file) => {
           const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
-          if (TEXT_EXTENSIONS.includes(ext)) {
+
+          if (IMAGE_EXTENSIONS.includes(ext)) {
+            // 이미지 파일: base64로 인코딩
+            return new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const base64 = e.target.result.split(',')[1]; // data:image/...;base64, 제거
+                resolve({ filename: file.name, type: 'image', data: base64 });
+              };
+              reader.onerror = () => {
+                console.error(`이미지 인코딩 실패: ${file.name}`);
+                resolve({ filename: file.name, type: 'error' });
+              };
+              reader.readAsDataURL(file);
+            });
+          } else if (TEXT_EXTENSIONS.includes(ext)) {
             // 텍스트 파일: 클라이언트에서 직접 읽기
             return new Promise((resolve) => {
               const reader = new FileReader();
-              reader.onload = (e) => resolve({ filename: file.name, text: e.target.result });
-              reader.onerror = () => resolve({ filename: file.name, text: "" });
+              reader.onload = (e) => resolve({ filename: file.name, type: 'text', text: e.target.result });
+              reader.onerror = () => {
+                console.error(`텍스트 읽기 실패: ${file.name}`);
+                resolve({ filename: file.name, type: 'text', text: "" });
+              };
               reader.readAsText(file);
             });
           } else {
-            // 바이너리 파일: 서버에서 추출
+            // 바이너리 파일: 서버에서 추출 (PDF, DOCX 등 - Docling 사용)
             try {
-              return await extractFileText(file);
-            } catch {
-              return { filename: file.name, text: "" };
+              const result = await extractFileText(file);
+              return { ...result, type: 'document' };
+            } catch (error) {
+              console.error(`문서 추출 실패: ${file.name}`, error);
+              return { filename: file.name, type: 'document', text: "" };
             }
           }
         });
-        fileTexts = await Promise.all(extractionPromises);
+
+        const results = await Promise.all(extractionPromises);
+
+        // 결과를 타입별로 분리
+        fileTexts = results.filter(r => r.type === 'text' || r.type === 'document');
+        imageBase64List = results
+          .filter(r => r.type === 'image' && r.data)
+          .map(r => r.data);
+
+        console.log(`파일 처리 완료: 텍스트 ${fileTexts.length}개, 이미지 ${imageBase64List.length}개`);
+      } catch (error) {
+        console.error('파일 처리 중 오류:', error);
       } finally {
         setIsExtractingFiles(false);
       }
+    }
+
+    // 이미지 검증 (최대 5개, 경고만 표시)
+    if (imageBase64List.length > 5) {
+      console.warn(`이미지가 ${imageBase64List.length}개입니다. 처리 시간이 길어질 수 있습니다.`);
     }
 
     // 파일 텍스트를 쿼리에 병합
@@ -209,6 +247,11 @@ export default function ChatInterface() {
       augmentedQuery = validTexts.length > 0 && query.trim()
         ? `${query}\n\n---\n${fileSection}`
         : fileSection || query;
+    }
+
+    // 이미지가 있는 경우 알림
+    if (imageBase64List.length > 0 && !query.trim() && validTexts.length === 0) {
+      augmentedQuery = "이 이미지에 대해 설명해주세요.";
     }
 
     if (!retryQuery) {
@@ -266,6 +309,9 @@ export default function ChatInterface() {
           top_k: config.searchTopK || null,
           use_rerank: config.useRerank || false,
           search_provider: config.activeSearchProviderId || null,
+          search_mode: config.searchMode || 'hybrid',
+          use_multimodal_search: config.useMultimodalSearch || false,
+          images: imageBase64List,
           use_sql: useSql,
           db_connection_id: selectedDbConnectionId,
         },
@@ -332,8 +378,19 @@ export default function ChatInterface() {
         },
       );
     } catch (error) {
-      console.error(error);
+      console.error('채팅 전송 오류:', error);
       setIsTyping(false);
+
+      // 에러 메시지 표시
+      const errorMessage = error.message || '메시지 전송 중 오류가 발생했습니다.';
+      addMessage({
+        id: crypto.randomUUID(),
+        role: "assistant",
+        text: `⚠️ ${errorMessage}`,
+        thinking: "",
+        thinkingTime: 0,
+        sources: [],
+      });
     }
   };
 
@@ -626,23 +683,36 @@ export default function ChatInterface() {
               </div>
 
               {/* 파일 태그 */}
-              {files.map((file, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] font-medium text-gray-700 dark:text-gray-300 shadow-sm"
-                >
-                  <Paperclip size={10} className="text-gray-400" />
-                  <span className="max-w-[100px] truncate">{file.name}</span>
-                  <button
-                    onClick={() =>
-                      setFiles((p) => p.filter((_, i) => i !== idx))
-                    }
-                    className="text-gray-400 hover:text-red-500 ml-0.5"
+              {files.map((file, idx) => {
+                const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+                const isImage = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"].includes(ext);
+
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] font-medium text-gray-700 dark:text-gray-300 shadow-sm"
                   >
-                    <X size={10} />
-                  </button>
-                </div>
-              ))}
+                    {isImage ? (
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt={file.name}
+                        className="w-6 h-6 object-cover rounded"
+                      />
+                    ) : (
+                      <Paperclip size={10} className="text-gray-400" />
+                    )}
+                    <span className="max-w-[100px] truncate">{file.name}</span>
+                    <button
+                      onClick={() =>
+                        setFiles((p) => p.filter((_, i) => i !== idx))
+                      }
+                      className="text-gray-400 hover:text-red-500 ml-0.5"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                );
+              })}
 
               {/* 활성 기능 표시 */}
               {activeFeatures.length > 0 && (

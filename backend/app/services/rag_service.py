@@ -95,8 +95,11 @@ class RAGService:
         top_k: Optional[int] = None,
         use_rerank: bool = False,
         search_provider: Optional[str] = None,
+        search_mode: str = "hybrid",
+        images: Optional[List[str]] = None,
         use_sql: bool = False,
         db_connection_id: Optional[str] = None,
+        use_multimodal_search: bool = False,
         db=None,
     ) -> AsyncGenerator[str, None]:
         """
@@ -115,6 +118,7 @@ class RAGService:
             top_k: 검색 결과 개수 (None이면 서버 기본값)
             use_rerank: Rerank 사용 여부
             search_provider: 검색 공급자 (ddg, serper)
+            search_mode: 검색 모드 (dense, sparse, hybrid)
         """
         try:
             effective_top_k = top_k or self.default_top_k
@@ -213,6 +217,8 @@ class RAGService:
                     message, kb_ids, user_id,
                     top_k=effective_top_k,
                     use_rerank=use_rerank,
+                    search_mode=search_mode,
+                    use_multimodal_search=use_multimodal_search,
                     db=db,
                 )
 
@@ -237,7 +243,10 @@ class RAGService:
 
             # 6. 답변 생성
             full_response = ""
-            async for chunk in self._generate_answer(message, context_text, llm, system_prompt, history):
+            async for chunk in self._generate_answer(
+                message, context_text, llm, system_prompt, history,
+                images=images, model=target_model
+            ):
                 full_response += chunk
                 yield json.dumps({"type": "content", "content": chunk}) + "\n"
 
@@ -381,24 +390,74 @@ class RAGService:
         user_id: int,
         top_k: int = 4,
         use_rerank: bool = False,
+        search_mode: str = "hybrid",
+        use_multimodal_search: bool = False,
         db=None,
     ) -> str:
-        """벡터 DB에서 컨텍스트 검색 (다중 KB, 캐시 적용, Rerank)"""
-        # 캐시 확인
-        cached = await self._get_cached_context(query, kb_ids, user_id)
-        if cached:
-            return cached
+        """벡터 DB에서 컨텍스트 검색 (다중 KB, 캐시 적용, Rerank, 멀티모달)"""
+        # 캐시 확인 (멀티모달일 때는 캐시 스킵)
+        if not use_multimodal_search:
+            cached = await self._get_cached_context(query, kb_ids, user_id)
+            if cached:
+                return cached
 
-        # 각 KB에서 벡터 검색 후 합침 (RetrieverFactory로 다중 소스 지원)
         all_docs = []
-        factory = get_retriever_factory()
-        for kb_id in kb_ids:
+
+        # 멀티모달 검색 (CLIP)
+        if use_multimodal_search:
+            from app.services.clip_embeddings import get_clip_embeddings
+            from app.services.vdb.qdrant_store import QdrantStore
+            from app.services.qdrant_resolver import resolve_qdrant_client
+
             try:
-                retriever = await factory.get_retriever(user_id, kb_id, top_k, db)
-                docs = await retriever.ainvoke(query)
-                all_docs.extend(docs)
+                clip = get_clip_embeddings()
+                query_vector = clip.embed_text_for_cross_modal(query)
+
+                for kb_id in kb_ids:
+                    try:
+                        # Qdrant 클라이언트 resolve
+                        ext_client = await resolve_qdrant_client(db, user_id, kb_id) if db else None
+                        client = self.vector_service.get_client(ext_client)
+                        collection_name = f"kb_{kb_id}"
+
+                        if not client.collection_exists(collection_name):
+                            logger.warning(f"Collection {collection_name} not found")
+                            continue
+
+                        # QdrantStore 인스턴스 생성
+                        store = QdrantStore(
+                            client=client,
+                            collection_name=collection_name,
+                            embeddings=self.vector_service.embeddings,
+                            embedding_dimension=settings.EMBEDDING_DIMENSION,
+                            user_id=user_id,
+                        )
+
+                        # 멀티모달 검색 (텍스트 + 이미지 모두)
+                        docs = await store.multimodal_search(
+                            query_vector=query_vector,
+                            content_type_filter=None,  # 텍스트와 이미지 모두 검색
+                            top_k=top_k
+                        )
+                        all_docs.extend(docs)
+
+                    except Exception as e:
+                        logger.warning(f"Multimodal retrieval from KB '{kb_id}' failed: {e}")
+
             except Exception as e:
-                logger.warning(f"Retrieval from KB '{kb_id}' failed: {e}")
+                logger.error(f"Multimodal search failed: {e}, falling back to normal search")
+                use_multimodal_search = False
+
+        # 일반 검색 (BGE + BM25)
+        if not use_multimodal_search:
+            factory = get_retriever_factory()
+            for kb_id in kb_ids:
+                try:
+                    retriever = await factory.get_retriever(user_id, kb_id, top_k, db, search_mode)
+                    docs = await retriever.ainvoke(query)
+                    all_docs.extend(docs)
+                except Exception as e:
+                    logger.warning(f"Retrieval from KB '{kb_id}' failed: {e}")
 
         if not all_docs:
             return ""
@@ -412,26 +471,48 @@ class RAGService:
                 seen.add(content_key)
                 unique_docs.append(doc)
 
-        # Rerank: 임베딩 유사도 기반 재정렬
+        # Rerank: 임베딩 유사도 기반 재정렬 (텍스트 문서만)
         if use_rerank and len(unique_docs) > 1:
             try:
-                unique_docs = self._rerank_documents(query, unique_docs, top_k)
-                logger.debug(f"Reranked {len(unique_docs)} documents")
+                # 텍스트 문서만 rerank (이미지는 제외)
+                text_docs = [d for d in unique_docs if d.metadata.get("content_type") != "image"]
+                image_docs = [d for d in unique_docs if d.metadata.get("content_type") == "image"]
+
+                if text_docs:
+                    text_docs = self._rerank_documents(query, text_docs, top_k)
+                    logger.debug(f"Reranked {len(text_docs)} text documents")
+
+                unique_docs = text_docs + image_docs
+
             except Exception as e:
                 logger.warning(f"Rerank failed, using original order: {e}")
 
         # top_k로 제한
         final_docs = unique_docs[:top_k]
 
-        context_text = "\n\n".join([doc.page_content for doc in final_docs])
+        # 컨텍스트 텍스트 생성 (이미지는 표시만)
+        context_parts = []
+        for doc in final_docs:
+            if doc.metadata.get("content_type") == "image":
+                # 이미지 문서는 경로와 설명만 표시
+                image_path = doc.metadata.get("image_path", "")
+                image_name = doc.metadata.get("source", "unknown")
+                context_parts.append(f"[이미지: {image_name}] (경로: {image_path})")
+            else:
+                # 텍스트 문서는 내용 표시
+                context_parts.append(doc.page_content)
+
+        context_text = "\n\n".join(context_parts)
 
         # 그래프 컨텍스트 추가
         graph_context = self._get_graph_context(query, kb_ids, user_id)
         if graph_context:
             context_text = f"{context_text}\n\n[Knowledge Graph Context]\n{graph_context}"
 
-        # 캐시 저장
-        await self._cache_context(query, kb_ids, user_id, context_text)
+        # 캐시 저장 (멀티모달이 아닐 때만)
+        if not use_multimodal_search:
+            await self._cache_context(query, kb_ids, user_id, context_text)
+
         return context_text
 
     def _rerank_documents(self, query: str, docs: list, top_k: int) -> list:
@@ -548,9 +629,11 @@ class RAGService:
         context: str,
         llm: ChatOllama,
         system_prompt: Optional[str] = None,
-        history: Optional[List[dict]] = None
+        history: Optional[List[dict]] = None,
+        images: Optional[List[str]] = None,
+        model: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
-        """LLM으로 답변 생성 (시스템 프롬프트 + 대화 기록 지원)"""
+        """LLM으로 답변 생성 (시스템 프롬프트 + 대화 기록 + 멀티모달 지원)"""
         history_text = self._build_history_text(history)
 
         # 시스템 프롬프트 기본값
@@ -567,18 +650,54 @@ class RAGService:
 
         template_parts.append("[질문]\n{question}\n\n답변:")
 
-        template = "\n".join(template_parts)
-        prompt = ChatPromptTemplate.from_template(template)
-        chain = prompt | llm
+        full_prompt = "\n".join(template_parts).format(
+            history=history_text,
+            context=context,
+            question=question
+        )
 
-        async for chunk in chain.astream({
-            "context": context,
-            "question": question,
-            "history": history_text
-        }):
-            content = chunk.content if hasattr(chunk, 'content') else str(chunk)
-            if content:
-                yield content
+        # 이미지가 있으면 Ollama Vision API 직접 호출
+        if images:
+            import httpx
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                try:
+                    response = await client.post(
+                        f"{settings.OLLAMA_BASE_URL}/api/generate",
+                        json={
+                            "model": model or self.default_model,
+                            "prompt": full_prompt,
+                            "images": images,
+                            "stream": True
+                        },
+                        timeout=120.0
+                    )
+                    response.raise_for_status()
+
+                    async for line in response.aiter_lines():
+                        if line.strip():
+                            try:
+                                data = json.loads(line)
+                                if "response" in data:
+                                    yield data["response"]
+                            except json.JSONDecodeError:
+                                continue
+                except Exception as e:
+                    logger.error(f"Ollama vision API error: {e}")
+                    yield f"[이미지 분석 오류: {str(e)}]"
+        else:
+            # 기존 LangChain 방식 (텍스트 전용)
+            template = "\n".join(template_parts)
+            prompt = ChatPromptTemplate.from_template(template)
+            chain = prompt | llm
+
+            async for chunk in chain.astream({
+                "context": context,
+                "question": question,
+                "history": history_text
+            }):
+                content = chunk.content if hasattr(chunk, 'content') else str(chunk)
+                if content:
+                    yield content
 
     async def _self_reflection(
         self,

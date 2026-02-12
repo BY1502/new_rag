@@ -733,3 +733,110 @@ async def delete_graph_edge(
         raise HTTPException(status_code=404, detail="관계를 찾을 수 없습니다.")
 
     return {"message": "관계가 삭제되었습니다."}
+
+
+# ============================================================
+# 멀티모달 검색 (이미지로 검색)
+# ============================================================
+
+@router.post("/{kb_id}/search-by-image")
+async def search_by_image(
+    kb_id: str,
+    image: UploadFile = File(...),
+    content_type_filter: Optional[str] = Query(None, description="text | image | None (둘 다)"),
+    top_k: int = Query(5, ge=1, le=20, description="반환할 문서 수"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    이미지를 업로드하여 CLIP 기반 멀티모달 검색을 수행합니다.
+
+    Args:
+        kb_id: 지식 베이스 ID
+        image: 검색할 이미지 파일
+        content_type_filter: "text" (텍스트만), "image" (이미지만), None (둘 다)
+        top_k: 반환할 결과 수
+
+    Returns:
+        검색된 문서 리스트 (텍스트 청크 또는 이미지)
+    """
+    import tempfile
+    from pathlib import Path
+    from app.services.clip_embeddings import get_clip_embeddings
+    from app.services.vdb.qdrant_store import QdrantStore
+
+    # 이미지 파일 검증
+    ext = Path(image.filename or "").suffix.lower()
+    if ext not in [".jpg", ".jpeg", ".png", ".gif", ".webp"]:
+        raise HTTPException(400, f"지원하지 않는 이미지 형식입니다: {ext}")
+
+    # Qdrant 클라이언트 resolve
+    ext_client = await resolve_qdrant_client(db, current_user.id, kb_id)
+    vector_service = get_vector_store_service()
+    client = vector_service.get_client(ext_client)
+    collection_name = f"kb_{kb_id}"
+
+    if not client.collection_exists(collection_name):
+        raise HTTPException(404, "지식 베이스가 존재하지 않습니다.")
+
+    # 임시 파일로 저장
+    temp_file = None
+    try:
+        # 이미지 임시 저장
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            content = await image.read()
+            tmp.write(content)
+            temp_file = tmp.name
+
+        # CLIP 이미지 임베딩 생성
+        clip = get_clip_embeddings()
+        query_vector = clip.embed_image(temp_file)
+
+        # QdrantStore를 통해 멀티모달 검색
+        store = QdrantStore(
+            client=client,
+            collection_name=collection_name,
+            embeddings=vector_service.embeddings,
+            embedding_dimension=settings.EMBEDDING_DIMENSION,
+            user_id=current_user.id,
+        )
+
+        import asyncio
+        results = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: asyncio.run(store.multimodal_search(
+                query_vector=query_vector,
+                content_type_filter=content_type_filter,
+                top_k=top_k
+            ))
+        )
+
+        # 결과 포맷팅
+        formatted_results = []
+        for doc in results:
+            metadata = doc.metadata
+            formatted_results.append({
+                "content": doc.page_content,
+                "metadata": metadata,
+                "content_type": metadata.get("content_type", "text"),
+                "source": metadata.get("source", "unknown"),
+                "image_path": metadata.get("image_path") if metadata.get("content_type") == "image" else None,
+                "image_dimensions": metadata.get("image_dimensions") if metadata.get("content_type") == "image" else None,
+            })
+
+        return {
+            "kb_id": kb_id,
+            "query_type": "image",
+            "content_type_filter": content_type_filter,
+            "results": formatted_results,
+            "total": len(formatted_results),
+        }
+
+    except Exception as e:
+        logger.error(f"Image search failed: {e}", exc_info=True)
+        raise HTTPException(500, f"이미지 검색 실패: {str(e)}")
+
+    finally:
+        # 임시 파일 삭제
+        if temp_file and Path(temp_file).exists():
+            Path(temp_file).unlink()

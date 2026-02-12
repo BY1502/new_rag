@@ -10,6 +10,8 @@ class UserSettingsResponse(BaseModel):
     retrieval_mode: str
     search_top_k: int
     use_rerank: bool
+    search_mode: str
+    use_multimodal_search: bool
     system_prompt: Optional[str] = None
     theme: str
     active_search_provider_id: str
@@ -28,6 +30,8 @@ class UserSettingsUpdate(BaseModel):
     retrieval_mode: Optional[str] = Field(None, pattern=r"^(hybrid|vector|graph)$")
     search_top_k: Optional[int] = Field(None, ge=1, le=20)
     use_rerank: Optional[bool] = None
+    search_mode: Optional[str] = Field(None, pattern=r"^(dense|sparse|hybrid)$")
+    use_multimodal_search: Optional[bool] = None
     system_prompt: Optional[str] = Field(None, max_length=5000)
     theme: Optional[str] = Field(None, pattern=r"^(Light|Dark)$")
     active_search_provider_id: Optional[str] = Field(None, max_length=50)

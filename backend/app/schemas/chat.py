@@ -1,5 +1,13 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
+from enum import Enum
+
+
+class SearchMode(str, Enum):
+    """검색 모드"""
+    dense = "dense"      # Vector similarity only (현재 기본)
+    sparse = "sparse"    # BM25 keyword only
+    hybrid = "hybrid"    # Dense + Sparse fusion (권장)
 
 
 class ChatMessage(BaseModel):
@@ -19,8 +27,11 @@ class ChatRequest(BaseModel):
     top_k: Optional[int] = Field(default=None, ge=1, le=20, description="검색 결과 개수 (없으면 서버 기본값)")
     use_rerank: bool = Field(default=False, description="Rerank 사용 여부")
     search_provider: Optional[str] = Field(default=None, max_length=50, description="검색 공급자 ID (ddg, serper)")
+    search_mode: SearchMode = Field(default=SearchMode.hybrid, description="검색 모드: dense(의미), sparse(키워드), hybrid(융합)")
+    images: List[str] = Field(default_factory=list, description="Base64 인코딩된 이미지 리스트 (멀티모달)")
     use_sql: bool = Field(default=False, description="Text-to-SQL 모드 사용 여부")
     db_connection_id: Optional[str] = Field(default=None, max_length=100, description="T2SQL용 DB 연결 ID")
+    use_multimodal_search: bool = Field(default=False, description="멀티모달 검색 활성화 (CLIP 사용, 이미지 검색 결과 포함)")
 
     class Config:
         json_schema_extra = {
@@ -35,6 +46,7 @@ class ChatRequest(BaseModel):
                 "active_mcp_ids": [],
                 "top_k": 5,
                 "use_rerank": False,
-                "search_provider": "ddg"
+                "search_provider": "ddg",
+                "search_mode": "hybrid"
             }
         }
