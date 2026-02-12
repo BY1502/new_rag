@@ -129,9 +129,17 @@ class Settings(BaseSettings):
         default="BAAI/bge-m3",
         description="임베딩 모델명"
     )
+    EMBEDDING_DIMENSION: int = Field(
+        default=1024,
+        description="텍스트 임베딩 차원 (BGE-m3: 1024)"
+    )
     CLIP_MODEL: str = Field(
         default="openai/clip-vit-base-patch32",
         description="CLIP 멀티모달 임베딩 모델명"
+    )
+    CLIP_DIMENSION: int = Field(
+        default=512,
+        description="CLIP 임베딩 차원 (ViT-B/32: 512)"
     )
     LLM_MODEL: str = Field(
         default="llama3.1",
@@ -151,8 +159,8 @@ class Settings(BaseSettings):
     # 이미지 저장 설정
     # ============================================================
     IMAGE_STORAGE_DIR: str = Field(
-        default="backend/storage/images",
-        description="이미지 파일 저장 디렉토리"
+        default="storage/images",
+        description="이미지 파일 저장 디렉토리 (backend/ 기준 상대 경로)"
     )
 
     # ============================================================

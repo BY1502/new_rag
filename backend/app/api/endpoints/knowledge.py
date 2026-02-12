@@ -149,19 +149,25 @@ async def delete_base(
 
 def validate_file(file: UploadFile) -> None:
     """파일 크기와 타입을 검증합니다."""
+    logger.info(f"Validating file: {file.filename}")
+
     if file.filename:
         ext = os.path.splitext(file.filename)[1].lower()
+        logger.info(f"File extension: '{ext}' | Allowed: {settings.allowed_extensions_list}")
+
         if ext not in settings.allowed_extensions_list:
-            raise HTTPException(
-                status_code=400,
-                detail=f"허용되지 않는 파일 형식입니다. 허용 형식: {', '.join(settings.allowed_extensions_list)}"
-            )
+            error_msg = f"허용되지 않는 파일 형식입니다 ('{ext}'). 허용 형식: {', '.join(settings.allowed_extensions_list)}"
+            logger.error(f"File validation failed: {error_msg}")
+            raise HTTPException(status_code=400, detail=error_msg)
+
     if hasattr(file, 'size') and file.size:
+        logger.info(f"File size: {file.size} bytes (max: {settings.max_upload_size_bytes})")
         if file.size > settings.max_upload_size_bytes:
-            raise HTTPException(
-                status_code=413,
-                detail=f"파일 크기가 너무 큽니다. 최대 {settings.MAX_UPLOAD_SIZE_MB}MB까지 허용됩니다."
-            )
+            error_msg = f"파일 크기가 너무 큽니다. 최대 {settings.MAX_UPLOAD_SIZE_MB}MB까지 허용됩니다."
+            logger.error(f"File validation failed: {error_msg}")
+            raise HTTPException(status_code=413, detail=error_msg)
+
+    logger.info("File validation passed")
 
 
 @router.post("/upload")
@@ -237,8 +243,8 @@ async def get_files_list(
         )]
     )
 
-    # 최대 2000개 스캔하여 고유 소스 파일과 청크 수 집계
-    file_counts = {}
+    # 최대 2000개 스캔하여 고유 소스 파일과 청크 수 집계 (이미지 메타데이터 포함)
+    file_data = {}  # source -> {count, metadata}
     scroll_offset = None
     scanned = 0
     while scanned < 2000:
@@ -247,27 +253,53 @@ async def get_files_list(
             scroll_filter=user_filter,
             limit=200,
             offset=scroll_offset,
-            with_payload=["metadata"],
+            with_payload=True,  # 전체 payload 가져오기
             with_vectors=False,
         )
         if not points:
             break
         for p in points:
-            src = (p.payload or {}).get("metadata", {}).get("source", "unknown")
-            file_counts[src] = file_counts.get(src, 0) + 1
+            metadata = (p.payload or {}).get("metadata", {})
+            src = metadata.get("source", "unknown")
+
+            if src not in file_data:
+                # 첫 번째 청크 메타데이터 저장 (이미지 정보 포함)
+                file_data[src] = {
+                    "count": 0,
+                    "content_type": metadata.get("content_type", "text"),
+                    "thumbnail_path": metadata.get("thumbnail_path"),
+                    "image_path": metadata.get("image_path"),
+                    "image_size": metadata.get("image_size"),
+                    "image_dimensions": metadata.get("image_dimensions"),
+                }
+            file_data[src]["count"] += 1
         scanned += len(points)
         scroll_offset = next_off
         if not next_off:
             break
 
     files = []
-    for source, count in sorted(file_counts.items(), key=lambda x: x[0]):
+    for source, data in sorted(file_data.items(), key=lambda x: x[0]):
         filename = source.rsplit("/", 1)[-1].rsplit("\\", 1)[-1] if source else "unknown"
-        files.append({
+        file_info = {
             "source": source,
             "filename": filename,
-            "chunk_count": count,
-        })
+            "chunk_count": data["count"],
+            "type": data["content_type"],
+        }
+
+        # 이미지 파일인 경우 썸네일 경로 추가
+        if data["content_type"] == "image":
+            if data.get("thumbnail_path"):
+                file_info["thumbnail_path"] = data["thumbnail_path"]
+            if data.get("image_path"):
+                file_info["image_path"] = data["image_path"]
+            if data.get("image_size"):
+                file_info["image_size"] = data["image_size"]
+            if data.get("image_dimensions"):
+                file_info["image_dimensions"] = data["image_dimensions"]
+
+        files.append(file_info)
 
     return {"files": files, "kb_id": kb_id}
 
@@ -384,14 +416,25 @@ async def get_chunks(
         for point in results.points:
             payload = point.payload or {}
             meta = payload.get("metadata", {})
-            chunks.append({
+            chunk_data = {
                 "id": str(point.id),
                 "text": payload.get("page_content", ""),
                 "metadata": meta,
                 "chunk_index": meta.get("chunk_index", 0),
                 "source": meta.get("source", "unknown"),
                 "score": round(point.score, 4) if hasattr(point, 'score') and point.score else None,
-            })
+                "content_type": meta.get("content_type", "text"),
+            }
+            # 이미지 메타데이터 추가
+            if meta.get("content_type") == "image":
+                chunk_data.update({
+                    "image_path": meta.get("image_path"),
+                    "thumbnail_path": meta.get("thumbnail_path"),
+                    "caption": meta.get("caption"),
+                    "ocr_text": meta.get("ocr_text"),
+                    "image_dimensions": meta.get("image_dimensions"),
+                })
+            chunks.append(chunk_data)
         return {"chunks": chunks, "total": total, "next_offset": None, "kb_id": kb_id}
     else:
         # 스크롤 (페이지네이션)
@@ -407,13 +450,24 @@ async def get_chunks(
         for point in points:
             payload = point.payload or {}
             meta = payload.get("metadata", {})
-            chunks.append({
+            chunk_data = {
                 "id": str(point.id),
                 "text": payload.get("page_content", ""),
                 "metadata": meta,
                 "chunk_index": meta.get("chunk_index", 0),
                 "source": meta.get("source", "unknown"),
-            })
+                "content_type": meta.get("content_type", "text"),
+            }
+            # 이미지 메타데이터 추가
+            if meta.get("content_type") == "image":
+                chunk_data.update({
+                    "image_path": meta.get("image_path"),
+                    "thumbnail_path": meta.get("thumbnail_path"),
+                    "caption": meta.get("caption"),
+                    "ocr_text": meta.get("ocr_text"),
+                    "image_dimensions": meta.get("image_dimensions"),
+                })
+            chunks.append(chunk_data)
         return {
             "chunks": chunks,
             "total": total,

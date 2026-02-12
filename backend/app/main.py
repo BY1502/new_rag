@@ -2,9 +2,11 @@
 RAG AI Backend - FastAPI 애플리케이션
 """
 import logging
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.api.api import api_router
@@ -91,6 +93,14 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# Static files (이미지 서빙)
+image_storage_path = Path(settings.IMAGE_STORAGE_DIR)
+if image_storage_path.exists():
+    app.mount("/images", StaticFiles(directory=str(image_storage_path)), name="images")
+    logger.info(f"Static image serving enabled: /images -> {image_storage_path}")
+else:
+    logger.warning(f"Image storage directory not found: {image_storage_path}")
 
 
 @app.get("/")

@@ -130,33 +130,89 @@ export default function KnowledgeManager() {
   const GraphView = () => <InteractiveGraphView kbId={currentKbId} />;
 
   const renderConfigForm = () => (
-    <div className="space-y-6">
-      <div className="space-y-4"><div><label className="block text-xs font-bold text-gray-700 mb-1.5">이름</label><input type="text" value={kbForm.name} onChange={e => setKbForm({...kbForm, name: e.target.value})} className="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"/></div><div><label className="block text-xs font-bold text-gray-700 mb-1.5">설명</label><textarea value={kbForm.description} onChange={e => setKbForm({...kbForm, description: e.target.value})} className="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none h-20"/></div></div>
-      <div className="border-t border-gray-100 pt-4 space-y-4">
-        <label className="block text-sm font-bold text-gray-800 flex items-center gap-2"><Sliders size={16}/> 청킹(Chunking) 전략</label>
-        <div className="grid grid-cols-2 gap-4">
-          <div onClick={() => setKbForm({...kbForm, chunkingMethod: 'fixed'})} className={`p-4 border-2 rounded-xl cursor-pointer transition-all flex flex-col items-center gap-2 text-center ${kbForm.chunkingMethod === 'fixed' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}><div className={`p-2 rounded-full ${kbForm.chunkingMethod === 'fixed' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}><AlignJustify size={20}/></div><div><div className="font-bold text-sm text-gray-800">고정 크기</div><div className="text-[10px] text-gray-500">Fixed Size</div></div></div>
-          <div onClick={() => setKbForm({...kbForm, chunkingMethod: 'semantic'})} className={`p-4 border-2 rounded-xl cursor-pointer transition-all flex flex-col items-center gap-2 text-center ${kbForm.chunkingMethod === 'semantic' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}><div className={`p-2 rounded-full ${kbForm.chunkingMethod === 'semantic' ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-500'}`}><Brain size={20}/></div><div><div className="font-bold text-sm text-gray-800">의미 기반</div><div className="text-[10px] text-gray-500">Semantic</div></div></div>
+    <div className="space-y-5">
+      <div className="space-y-4">
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5">이름</label>
+          <input type="text" value={kbForm.name} onChange={e => setKbForm({...kbForm, name: e.target.value})} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white" placeholder="지식 베이스 이름"/>
         </div>
-        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5">설명</label>
+          <textarea value={kbForm.description} onChange={e => setKbForm({...kbForm, description: e.target.value})} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white resize-none h-20" placeholder="지식 베이스 설명"/>
+        </div>
+      </div>
+      <div className="border-t border-gray-200 pt-5 space-y-4">
+        <label className="block text-sm font-bold text-gray-900 flex items-center gap-2"><Sliders size={15}/> 청킹 전략</label>
+        <div className="grid grid-cols-2 gap-3">
+          <div onClick={() => setKbForm({...kbForm, chunkingMethod: 'fixed'})} className={`p-4 border-2 rounded-lg cursor-pointer transition-all flex flex-col items-center gap-2 text-center ${kbForm.chunkingMethod === 'fixed' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400 bg-white'}`}>
+            <div className={`p-2 rounded-lg ${kbForm.chunkingMethod === 'fixed' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+              <AlignJustify size={18}/>
+            </div>
+            <div>
+              <div className="font-bold text-sm text-gray-900">고정 크기</div>
+              <div className="text-[10px] text-gray-500">Fixed Size</div>
+            </div>
+          </div>
+          <div onClick={() => setKbForm({...kbForm, chunkingMethod: 'semantic'})} className={`p-4 border-2 rounded-lg cursor-pointer transition-all flex flex-col items-center gap-2 text-center ${kbForm.chunkingMethod === 'semantic' ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover:border-gray-400 bg-white'}`}>
+            <div className={`p-2 rounded-lg ${kbForm.chunkingMethod === 'semantic' ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>
+              <Brain size={18}/>
+            </div>
+            <div>
+              <div className="font-bold text-sm text-gray-900">의미 기반</div>
+              <div className="text-[10px] text-gray-500">Semantic</div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-4">
           {kbForm.chunkingMethod === 'fixed' ? (
-            <><div><div className="flex justify-between mb-1"><label className="text-xs font-bold text-gray-600">Chunk Size (Token)</label><span className="text-xs font-mono bg-white px-1.5 rounded border">{kbForm.chunkSize}</span></div><input type="range" min="128" max="2048" step="128" value={kbForm.chunkSize} onChange={e => setKbForm({...kbForm, chunkSize: Number(e.target.value)})} className="w-full h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-blue-600"/></div><div><div className="flex justify-between mb-1"><label className="text-xs font-bold text-gray-600">Chunk Overlap</label><span className="text-xs font-mono bg-white px-1.5 rounded border">{kbForm.chunkOverlap}</span></div><input type="range" min="0" max="200" step="10" value={kbForm.chunkOverlap} onChange={e => setKbForm({...kbForm, chunkOverlap: Number(e.target.value)})} className="w-full h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-blue-600"/></div></>
+            <>
+              <div>
+                <div className="flex justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-gray-700">Chunk Size (Token)</label>
+                  <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">{kbForm.chunkSize}</span>
+                </div>
+                <input type="range" min="128" max="2048" step="128" value={kbForm.chunkSize} onChange={e => setKbForm({...kbForm, chunkSize: Number(e.target.value)})} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"/>
+              </div>
+              <div>
+                <div className="flex justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-gray-700">Chunk Overlap</label>
+                  <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">{kbForm.chunkOverlap}</span>
+                </div>
+                <input type="range" min="0" max="200" step="10" value={kbForm.chunkOverlap} onChange={e => setKbForm({...kbForm, chunkOverlap: Number(e.target.value)})} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"/>
+              </div>
+            </>
           ) : (
-            <><div><div className="flex gap-3 bg-purple-50 border border-purple-100 p-3 rounded-lg text-xs text-purple-800 mb-2"><Info size={16} className="shrink-0 mt-0.5"/><p><strong>시멘틱 청킹이란?</strong><br/>텍스트의 의미가 급격히 변하는 지점을 찾아 문서를 나눕니다. 문맥이 끊기지 않아 검색 정확도가 높아집니다.</p></div><div><div className="flex justify-between mb-1"><label className="text-xs font-bold text-gray-600">Similarity Threshold</label><span className="text-xs font-mono bg-white px-1.5 rounded border">{kbForm.semanticThreshold}</span></div><input type="range" min="0.1" max="0.95" step="0.05" value={kbForm.semanticThreshold} onChange={e => setKbForm({...kbForm, semanticThreshold: Number(e.target.value)})} className="w-full h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-purple-600"/><p className="text-[10px] text-gray-400 mt-1 text-right">값이 높을수록 더 세밀하게 나뉩니다.</p></div></div></>
+            <div>
+              <div className="flex gap-2 bg-purple-50 border border-purple-200 p-3 rounded-lg text-xs text-purple-900 mb-3">
+                <Info size={14} className="shrink-0 mt-0.5"/>
+                <p><strong>시멘틱 청킹이란?</strong><br/>텍스트의 의미가 급격히 변하는 지점을 찾아 문서를 나눕니다. 문맥이 끊기지 않아 검색 정확도가 높아집니다.</p>
+              </div>
+              <div>
+                <div className="flex justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-gray-700">Similarity Threshold</label>
+                  <span className="text-xs font-mono bg-purple-50 text-purple-700 px-2 py-0.5 rounded border border-purple-200">{kbForm.semanticThreshold}</span>
+                </div>
+                <input type="range" min="0.1" max="0.95" step="0.05" value={kbForm.semanticThreshold} onChange={e => setKbForm({...kbForm, semanticThreshold: Number(e.target.value)})} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"/>
+                <p className="text-[10px] text-gray-500 mt-1 text-right">값이 높을수록 더 세밀하게 나뉩니다.</p>
+              </div>
+            </div>
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 p-2.5 rounded-lg"><Info size={14} className="shrink-0"/><span>청킹 설정은 새로 업로드하는 파일에만 적용됩니다. 기존 파일은 영향받지 않습니다.</span></div>
+        <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 p-2.5 rounded-lg">
+          <Info size={13} className="shrink-0"/>
+          <span>청킹 설정은 새로 업로드하는 파일에만 적용됩니다.</span>
+        </div>
       </div>
       {qdrantServices.length > 0 && (
-        <div className="border-t border-gray-100 pt-4 space-y-4">
-          <label className="block text-sm font-bold text-gray-800 flex items-center gap-2"><Server size={16}/> 벡터 DB 설정</label>
+        <div className="border-t border-gray-200 pt-5 space-y-3">
+          <label className="block text-sm font-bold text-gray-900 flex items-center gap-2"><Server size={15}/> 벡터 DB 설정</label>
           <div>
-            <label className="block text-xs font-bold text-gray-600 mb-1.5">Qdrant 서비스</label>
-            <select value={kbForm.externalServiceId} onChange={e => setKbForm({...kbForm, externalServiceId: e.target.value})} className="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white appearance-none cursor-pointer hover:border-blue-400 transition">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">Qdrant 서비스</label>
+            <select value={kbForm.externalServiceId} onChange={e => setKbForm({...kbForm, externalServiceId: e.target.value})} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white cursor-pointer">
               <option value="">기본 (로컬 Qdrant)</option>
               {qdrantServices.map(svc => (<option key={svc.service_id} value={svc.service_id}>{svc.name} ({svc.url})</option>))}
             </select>
-            <p className="text-[10px] text-gray-400 mt-1">문서 벡터를 저장할 Qdrant 서비스를 선택합니다.</p>
+            <p className="text-[10px] text-gray-500 mt-1">문서 벡터를 저장할 Qdrant 서비스를 선택합니다.</p>
           </div>
         </div>
       )}
@@ -165,50 +221,175 @@ export default function KnowledgeManager() {
 
   if (viewMode === 'list') {
     return (
-      <div className="h-full flex flex-col p-8 bg-gray-50/50 overflow-y-auto custom-scrollbar">
-        <div className="flex justify-between items-end mb-8"><div><h2 className="text-3xl font-bold text-gray-900">지식 베이스</h2><p className="text-gray-500 mt-2">AI가 학습하고 참조할 문서 저장소들을 관리합니다.</p></div><button onClick={openCreateModal} className="flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-200 font-bold text-sm"><Plus size={20} /> <span>새 지식 베이스 만들기</span></button></div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">{knowledgeBases.map(kb => (<div key={kb.id} onClick={() => handleSelectKb(kb.id)} className="group bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl hover:border-blue-300 hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col h-64"><div className="flex items-start justify-between mb-4"><div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300"><Database size={24} /></div>{kb.config?.chunkingMethod === 'semantic' && <span className="text-[10px] font-bold px-2 py-1 bg-purple-50 text-purple-700 rounded-full border border-purple-100">Semantic</span>}</div><h3 className="text-lg font-bold text-gray-800 mb-2 group-hover:text-blue-600 transition-colors">{kb.name}</h3><p className="text-sm text-gray-500 line-clamp-3 mb-4 flex-1">{kb.description || '설명이 없습니다.'}</p><div className="pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400"><div className="flex items-center gap-3"><span className="flex items-center gap-1"><FileText size={12}/> {kbStats[kb.id]?.file_count ?? kb.files.length} 문서</span><span className="flex items-center gap-1"><Layers size={12}/> {kbStats[kb.id]?.chunk_count ?? '—'} 청크</span><span className="flex items-center gap-1"><Network size={12}/> {kbStats[kb.id]?.graph_node_count ?? '—'} 노드</span></div><div className="flex items-center gap-1"><Clock size={12}/> {kb.created_at}</div></div></div>))}<button onClick={openCreateModal} className="border-2 border-dashed border-gray-300 rounded-2xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all h-64 gap-4"><div className="p-4 bg-gray-100 rounded-full"><Plus size={24}/></div><span className="font-bold">새 지식 베이스 추가</span></button></div>
-        <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="새 지식 베이스 생성"><div className="p-6">{renderConfigForm()}<div className="mt-8 flex justify-end gap-3"><button onClick={() => setIsCreateOpen(false)} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition">취소</button><button onClick={() => handleSaveKb(true)} className="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg transition">생성하기</button></div></div></Modal>
+      <div className="h-full flex flex-col p-8 bg-gray-50 overflow-y-auto custom-scrollbar">
+        <div className="flex justify-between items-end mb-8">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">지식 베이스</h2>
+            <p className="text-gray-600">AI가 학습하고 참조할 문서 저장소들을 관리합니다.</p>
+          </div>
+          <button onClick={openCreateModal} className="flex items-center gap-2 px-5 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors shadow-sm">
+            <Plus size={20} />
+            <span>새 지식 베이스</span>
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          {knowledgeBases.map((kb, idx) => (
+            <div
+              key={kb.id}
+              onClick={() => handleSelectKb(kb.id)}
+              className={`group bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-green-300 hover-lift cursor-pointer flex flex-col h-56 animate-scaleIn animate-stagger-${Math.min(idx % 4 + 1, 4)}`}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="p-3 bg-green-50 text-green-600 rounded-lg group-hover:bg-green-100 group-hover:scale-110 transition-all">
+                  <Database size={22} className="group-hover:rotate-6 transition-transform" />
+                </div>
+                {kb.config?.chunkingMethod === 'semantic' && (
+                  <span className="text-[10px] font-semibold px-2 py-1 bg-purple-50 text-purple-700 rounded-full border border-purple-200 animate-fadeIn">Semantic</span>
+                )}
+              </div>
+              <h3 className="text-base font-bold text-gray-900 mb-2 group-hover:text-green-600 transition-colors">{kb.name}</h3>
+              <p className="text-sm text-gray-600 line-clamp-2 mb-4 flex-1">{kb.description || '설명이 없습니다.'}</p>
+              <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-1 hover:text-blue-600 transition-colors"><FileText size={11}/> {kbStats[kb.id]?.file_count ?? kb.files.length}</span>
+                  <span className="flex items-center gap-1 hover:text-purple-600 transition-colors"><Layers size={11}/> {kbStats[kb.id]?.chunk_count ?? '—'}</span>
+                  <span className="flex items-center gap-1 hover:text-green-600 transition-colors"><Network size={11}/> {kbStats[kb.id]?.graph_node_count ?? '—'}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+          <button onClick={openCreateModal} className="group border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-green-400 hover:text-green-600 hover:bg-green-50 hover-lift h-56 gap-3 animate-scaleIn">
+            <div className="p-3 bg-gray-100 group-hover:bg-green-100 rounded-full group-hover:scale-110 transition-all">
+              <Plus size={24} className="group-hover:rotate-90 transition-transform"/>
+            </div>
+            <span className="font-semibold">새 지식 베이스</span>
+          </button>
+        </div>
+        <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="새 지식 베이스 생성"><div className="p-6">{renderConfigForm()}<div className="mt-8 flex justify-end gap-3"><button onClick={() => setIsCreateOpen(false)} className="px-5 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">취소</button><button onClick={() => handleSaveKb(true)} className="px-5 py-2.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors shadow-sm">생성하기</button></div></div></Modal>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col p-6 bg-gray-50/50">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-4"><button onClick={() => setViewMode('list')} className="p-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-100 text-gray-600 transition shadow-sm"><ArrowLeft size={20} /></button><div><h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">{currentKb?.name}<span className="text-xs font-normal text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">{currentKb?.config?.chunkingMethod === 'semantic' ? 'Semantic' : 'Fixed'}</span></h2><div className="flex items-center gap-3 mt-1"><p className="text-sm text-gray-500">{currentKb?.description || '설명이 없습니다.'}</p>{kbStats[currentKbId] && (<span className="flex items-center gap-3 text-xs text-gray-400 ml-2 border-l pl-3 border-gray-200"><span className="flex items-center gap-1"><Layers size={11}/> {kbStats[currentKbId].chunk_count} 청크</span><span className="flex items-center gap-1"><Network size={11}/> {kbStats[currentKbId].graph_node_count} 노드</span><span className="flex items-center gap-1"><GitBranch size={11}/> {kbStats[currentKbId].graph_edge_count} 엣지</span></span>)}</div></div></div>
-        <div className="flex bg-gray-200 p-1 rounded-xl"><button onClick={() => setActiveTab('files')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 ${activeTab === 'files' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><FileText size={16}/> 목록</button><button onClick={() => setActiveTab('chunks')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 ${activeTab === 'chunks' ? 'bg-white text-orange-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Layers size={16}/> 청크</button><button onClick={() => setActiveTab('graph')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 ${activeTab === 'graph' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Network size={16}/> 그래프</button></div>
-        <button onClick={openConfigModal} className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition text-sm font-bold shadow-sm"><Settings size={16} /> <span>설정</span></button>
+    <div className="h-full flex flex-col p-6 bg-gray-50">
+      <div className="flex justify-between items-center mb-5">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setViewMode('list')} className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 transition-colors shadow-sm">
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              {currentKb?.name}
+              <span className="text-xs font-medium text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
+                {currentKb?.config?.chunkingMethod === 'semantic' ? 'Semantic' : 'Fixed'}
+              </span>
+            </h2>
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-sm text-gray-600">{currentKb?.description || '설명이 없습니다.'}</p>
+              {kbStats[currentKbId] && (
+                <span className="flex items-center gap-3 text-xs text-gray-500 ml-2 border-l pl-3 border-gray-300">
+                  <span className="flex items-center gap-1"><Layers size={10}/> {kbStats[currentKbId].chunk_count}</span>
+                  <span className="flex items-center gap-1"><Network size={10}/> {kbStats[currentKbId].graph_node_count}</span>
+                  <span className="flex items-center gap-1"><GitBranch size={10}/> {kbStats[currentKbId].graph_edge_count}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
+            <button onClick={() => setActiveTab('files')} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'files' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+              <FileText size={15}/> 목록
+            </button>
+            <button onClick={() => setActiveTab('chunks')} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'chunks' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+              <Layers size={15}/> 청크
+            </button>
+            <button onClick={() => setActiveTab('graph')} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'graph' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+              <Network size={15}/> 그래프
+            </button>
+          </div>
+          <button onClick={openConfigModal} className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium shadow-sm">
+            <Settings size={15} /> <span>설정</span>
+          </button>
+        </div>
       </div>
-      <div className="flex-1 bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col overflow-hidden">
+      <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col overflow-hidden">
         {activeTab === 'files' ? (
           <>
-            <div className="h-16 border-b flex items-center justify-between px-6 bg-gray-50/30">
-              <div className="flex items-center gap-3">
+            <div className="h-16 border-b border-gray-200 flex items-center justify-between px-5 bg-gray-50">
+              <div className="flex items-center gap-2">
                 <input type="file" multiple className="hidden" ref={fileInputRef} onChange={(e) => handleFiles(Array.from(e.target.files))}/>
                 <input type="file" multiple webkitdirectory="" className="hidden" ref={folderInputRef} onChange={(e) => handleFiles(Array.from(e.target.files))}/>
-                <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-sm font-bold transition"><Upload size={16}/> 파일 업로드</button>
-                <button onClick={() => folderInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-bold transition"><FolderUp size={16}/> 폴더 업로드</button>
+                <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">
+                  <Upload size={15}/> 파일 업로드
+                </button>
+                <button onClick={() => folderInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                  <FolderUp size={15}/> 폴더 업로드
+                </button>
               </div>
-              <div className="relative w-64"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/><input type="text" placeholder="문서 검색..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"/></div>
+              <div className="relative w-64">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                <input type="text" placeholder="문서 검색..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"/>
+              </div>
             </div>
-            <div className={`flex-1 overflow-y-auto p-4 ${isUploadDragging ? 'bg-blue-50/50' : ''}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+            <div className={`flex-1 overflow-y-auto p-4 transition-colors ${isUploadDragging ? 'bg-blue-50' : 'bg-white'}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
               {currentFiles.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl m-4"><div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-4"><Upload size={32} className="text-blue-400"/></div><h3 className="text-lg font-bold text-gray-600">문서를 업로드하세요</h3><p className="text-sm mt-1 text-center">PDF, DOCX, TXT, MD, PPTX, XLSX 파일을<br/>드래그하거나 상단 버튼을 눌러 업로드하세요.</p><p className="text-xs text-gray-300 mt-3">최대 500MB</p></div>
+                <div className="h-full flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-300 rounded-xl m-4">
+                  <div className="w-20 h-20 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
+                    <Upload size={36} className="text-blue-500"/>
+                  </div>
+                  <h3 className="text-base font-bold text-gray-700 mb-2">문서를 업로드하세요</h3>
+                  <p className="text-sm text-center text-gray-500 mb-1">PDF, DOCX, TXT, MD, PPTX, XLSX, JPG, PNG 파일을</p>
+                  <p className="text-sm text-center text-gray-500">드래그하거나 상단 버튼을 눌러 업로드하세요</p>
+                  <p className="text-xs text-gray-400 mt-3">최대 500MB</p>
+                </div>
               ) : (
                 <div className="grid grid-cols-1 gap-2">
-                  {currentFiles.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).map(file => (
-                    <div key={file.id} className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-xl hover:shadow-sm hover:border-blue-200 transition group">
-                      <div className="flex items-center gap-4"><div className="p-3 bg-red-50 text-red-500 rounded-lg"><FileText size={20}/></div><div><div className="font-bold text-gray-800 text-sm">{file.name}</div><div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2"><span>{file.size}</span><span className="w-1 h-1 bg-gray-300 rounded-full"></span><span className="capitalize">{file.type}</span></div></div></div>
-                      <div className="flex items-center gap-4">
-                        {file.status === 'ready' && <span className="flex items-center gap-1.5 text-xs font-bold text-green-600 bg-green-50 px-2.5 py-1 rounded-full"><CheckCircle size={12}/> Ready</span>}
-                        {file.status === 'uploading' && <span className="flex items-center gap-1.5 text-xs font-bold text-yellow-600 bg-yellow-50 px-2.5 py-1 rounded-full"><Loader2 size={12} className="animate-spin"/> Uploading</span>}
-                        {file.status === 'processing' && <span className="flex items-center gap-1.5 text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full"><Loader2 size={12} className="animate-spin"/> Processing</span>}
-                        {file.status === 'error' && <span className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 px-2.5 py-1 rounded-full cursor-help" title={file.errorMessage || '업로드 실패'}><AlertCircle size={12}/> {file.errorMessage ? file.errorMessage.slice(0, 30) : 'Error'}</span>}
-                        <button onClick={() => handleDeleteFile(file)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100"><Trash2 size={18}/></button>
+                  {currentFiles.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).map((file, idx) => {
+                    const isImage = file.type === 'image' || /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
+                    const thumbnailUrl = file.thumbnail_path ? `http://localhost:8000${file.thumbnail_path}` : null;
+
+                    return (
+                    <div key={file.id} className={`group flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md hover:border-gray-300 hover-lift transition-all animate-slideUp animate-stagger-${Math.min(idx % 4 + 1, 4)}`}>
+                      <div className="flex items-center gap-3">
+                        {isImage && thumbnailUrl ? (
+                          <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 border-2 border-gray-200 group-hover:border-pink-400 transition-colors">
+                            <img
+                              src={thumbnailUrl}
+                              alt={file.name}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            />
+                            <div className="absolute inset-0 bg-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        ) : (
+                          <div className={`p-2.5 rounded-lg ${isImage ? 'bg-pink-50 text-pink-600' : 'bg-red-50 text-red-600'} group-hover:scale-110 transition-transform`}>
+                            <FileText size={18}/>
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-semibold text-gray-900 text-sm flex items-center gap-2">
+                            {file.name}
+                            {isImage && <span className="text-[10px] font-bold px-2 py-0.5 bg-pink-100 text-pink-700 rounded-full">IMAGE</span>}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-2">
+                            <span>{file.size}</span>
+                            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                            <span className="capitalize">{file.type}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {file.status === 'ready' && <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-200"><CheckCircle size={11}/> 완료</span>}
+                        {file.status === 'uploading' && <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200"><Loader2 size={11} className="animate-spin"/> 업로드 중</span>}
+                        {file.status === 'processing' && <span className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200"><Loader2 size={11} className="animate-spin"/> 처리 중</span>}
+                        {file.status === 'error' && <span className="flex items-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 px-2.5 py-1 rounded-full border border-red-200 cursor-help" title={file.errorMessage || '업로드 실패'}><AlertCircle size={11}/> 실패</span>}
+                        <button onClick={() => handleDeleteFile(file)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg hover:scale-110 active:scale-95 transition-all opacity-0 group-hover:opacity-100">
+                          <Trash2 size={16}/>
+                        </button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -217,25 +398,40 @@ export default function KnowledgeManager() {
           <ChunksView kbId={currentKbId} />
         ) : (<GraphView />)}
       </div>
-      <Modal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} title="지식 베이스 설정"><div className="p-6">{renderConfigForm()}<div className="mt-8 flex justify-between items-center"><button onClick={handleDeleteKb} className="text-red-500 text-sm font-bold hover:underline flex items-center gap-1"><Trash2 size={14}/> 삭제하기</button><div className="flex gap-3"><button onClick={() => setIsConfigOpen(false)} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition">취소</button><button onClick={() => handleSaveKb(false)} className="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg transition">저장하기</button></div></div></div></Modal>
+      <Modal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} title="지식 베이스 설정">
+        <div className="p-6">
+          {renderConfigForm()}
+          <div className="mt-8 flex justify-between items-center">
+            <button onClick={handleDeleteKb} className="text-red-600 text-sm font-semibold hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5">
+              <Trash2 size={14}/> 삭제하기
+            </button>
+            <div className="flex gap-3">
+              <button onClick={() => setIsConfigOpen(false)} className="px-5 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">취소</button>
+              <button onClick={() => handleSaveKb(false)} className="px-5 py-2.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors shadow-sm">저장하기</button>
+            </div>
+          </div>
+        </div>
+      </Modal>
       {/* 파일 삭제 확인 다이얼로그 */}
       <Modal isOpen={!!deleteConfirm} onClose={() => !deleting && setDeleteConfirm(null)} title="파일 삭제 확인">
         <div className="p-6">
-          <div className="flex items-center gap-3 mb-4 p-4 bg-red-50 border border-red-200 rounded-xl">
-            <div className="p-2 bg-red-100 rounded-lg"><AlertCircle size={24} className="text-red-500" /></div>
+          <div className="flex items-center gap-3 mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="p-2.5 bg-red-100 rounded-lg">
+              <AlertCircle size={24} className="text-red-600" />
+            </div>
             <div>
-              <p className="text-sm font-bold text-red-800">이 작업은 되돌릴 수 없습니다</p>
-              <p className="text-xs text-red-600 mt-0.5">벡터 DB에 저장된 청크 데이터도 영구 삭제됩니다.</p>
+              <p className="text-sm font-semibold text-red-900">이 작업은 되돌릴 수 없습니다</p>
+              <p className="text-xs text-red-700 mt-0.5">벡터 DB에 저장된 청크 데이터도 영구 삭제됩니다.</p>
             </div>
           </div>
-          <p className="text-sm text-gray-700 mb-1">다음 파일을 삭제하시겠습니까?</p>
-          <p className="text-sm font-bold text-gray-900 bg-gray-100 px-3 py-2 rounded-lg mb-4 flex items-center gap-2">
-            <FileText size={14} className="text-gray-400" />
+          <p className="text-sm text-gray-700 mb-2">다음 파일을 삭제하시겠습니까?</p>
+          <p className="text-sm font-semibold text-gray-900 bg-gray-100 px-3 py-2.5 rounded-lg mb-4 flex items-center gap-2 border border-gray-300">
+            <FileText size={14} className="text-gray-600" />
             {deleteConfirm?.fileName}
           </p>
           <div className="flex justify-end gap-3">
-            <button onClick={() => setDeleteConfirm(null)} disabled={deleting} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition disabled:opacity-50">취소</button>
-            <button onClick={confirmDeleteFile} disabled={deleting} className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition disabled:opacity-50 flex items-center gap-2">
+            <button onClick={() => setDeleteConfirm(null)} disabled={deleting} className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50">취소</button>
+            <button onClick={confirmDeleteFile} disabled={deleting} className="px-4 py-2.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 shadow-sm flex items-center gap-2">
               {deleting ? <><Loader2 size={14} className="animate-spin" /> 삭제 중...</> : <><Trash2 size={14} /> 영구 삭제</>}
             </button>
           </div>

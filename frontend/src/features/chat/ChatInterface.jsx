@@ -451,30 +451,26 @@ export default function ChatInterface() {
   if (activeMcpIds.length > 0) activeFeatures.push(`MCP ${activeMcpIds.length}`);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 relative bg-gray-50/30 dark:bg-gray-900">
+    <div className="flex-1 flex flex-col min-h-0 relative bg-gray-50">
       {/* 메시지 리스트 */}
       <div
         className="flex-1 overflow-y-auto custom-scrollbar scroll-smooth"
         ref={scrollRef}
       >
         {currentMessages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-6">
-            <div className="w-20 h-20 bg-white dark:bg-gray-800 shadow-sm border dark:border-gray-700 rounded-3xl flex items-center justify-center">
+          <div className="h-full flex flex-col items-center justify-center text-gray-500 gap-6 px-4">
+            <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg rounded-2xl flex items-center justify-center">
               <AgentIcon
                 agentId={currentAgent?.id}
-                size={40}
-                className={
-                  currentAgent?.id === "agent-rag"
-                    ? "text-blue-600"
-                    : "text-indigo-500"
-                }
+                size={36}
+                className="text-white"
               />
             </div>
-            <div className="text-center max-w-lg px-4">
-              <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">
+            <div className="text-center max-w-lg">
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">
                 {currentAgent?.name || "AI"}에게 질문하세요
               </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+              <p className="text-sm text-gray-600 leading-relaxed">
                 {currentAgent?.description ||
                   "지식 베이스를 기반으로 정확하게 답변합니다."}
               </p>
@@ -492,7 +488,7 @@ export default function ChatInterface() {
                     setInput(q);
                     textareaRef.current?.focus();
                   }}
-                  className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-600 dark:text-gray-400 hover:border-blue-300 hover:text-blue-600 transition font-medium"
+                  className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-700 hover:bg-gray-50 hover:border-green-400 hover:text-green-600 transition-all font-medium shadow-sm"
                 >
                   {q}
                 </button>
@@ -542,20 +538,20 @@ export default function ChatInterface() {
       </div>
 
       {/* 입력창 영역 */}
-      <div className="border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-3">
+      <div className="border-t border-gray-200 bg-white px-4 py-3">
         <div className="max-w-4xl mx-auto relative">
           {isTyping && (
             <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-20">
               <button
                 onClick={handleStop}
-                className="flex items-center gap-2 px-4 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md rounded-full text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 font-medium transition"
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-red-300 shadow-md rounded-full text-sm text-red-600 hover:bg-red-50 font-medium transition-colors"
               >
                 <StopCircle size={14} /> 생성 중단
               </button>
             </div>
           )}
 
-          <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400 transition-all flex flex-col relative">
+          <div className="bg-white border border-gray-300 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-green-500 focus-within:border-green-500 transition-all flex flex-col relative">
             {/* 상단 태그 영역 */}
             <div className="px-3 pt-2.5 flex flex-wrap items-center gap-1.5">
               {/* 에이전트 선택 */}
@@ -567,7 +563,7 @@ export default function ChatInterface() {
                     setIsKbMenuOpen(false);
                     setIsMcpMenuOpen(false);
                   }}
-                  className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
                 >
                   <AgentIcon agentId={currentAgent?.id} size={12} />
                   <span className="max-w-[100px] truncate">
@@ -579,8 +575,8 @@ export default function ChatInterface() {
                   />
                 </button>
                 {isAgentMenuOpen && (
-                  <div className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 overflow-hidden">
-                    <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700">
+                  <div className="absolute bottom-full left-0 mb-2 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-30 overflow-hidden">
+                    <div className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
                       에이전트 선택
                     </div>
                     <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
@@ -627,7 +623,7 @@ export default function ChatInterface() {
                     setIsAgentMenuOpen(false);
                     setIsMcpMenuOpen(false);
                   }}
-                  className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
                 >
                   <Database size={12} />
                   <span className="max-w-[120px] truncate">
@@ -639,8 +635,8 @@ export default function ChatInterface() {
                   />
                 </button>
                 {isKbMenuOpen && (
-                  <div className="absolute bottom-full left-0 mb-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 overflow-hidden">
-                    <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700">
+                  <div className="absolute bottom-full left-0 mb-2 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-30 overflow-hidden">
+                    <div className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
                       지식 베이스 (다중 선택)
                     </div>
                     <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">

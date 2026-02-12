@@ -23,7 +23,11 @@
       "Bash(findstr:*)",
       "Bash(alembic revision:*)",
       "Bash(python migrate_db.py:*)",
-      "Bash(python test_image_upload.py:*)"
+      "Bash(python test_image_upload.py:*)",
+      "Bash(docker-compose stop:*)",
+      "Bash(docker volume ls:*)",
+      "Bash(docker-compose start:*)",
+      "Bash(docker-compose exec:*)"
     ]
   }
 }

@@ -1,9 +1,15 @@
 """
-문서 수집 서비스
-- 파일 업로드 처리
-- 문서 파싱 (Docling, PyPDF)
-- 청킹 및 임베딩
-- 벡터/그래프 DB 저장
+문서 수집 서비스 (Ingestion Pipeline)
+
+전체 문서 처리 파이프라인:
+1. 파일 업로드 및 안전한 저장
+2. 문서 파싱 (Docling → PyPDF 폴백)
+3. 이미지 추출 및 저장
+4. 텍스트 청킹 (고정 크기 또는 시맨틱)
+5. 임베딩 생성 (BGE-m3 텍스트 + CLIP 멀티모달)
+6. 벡터 DB 저장 (Qdrant: dense + sparse + clip)
+7. 그래프 DB 저장 (Neo4j: 엔티티 관계)
+8. 이미지 인덱싱 (CLIP + 캡셔닝 + OCR)
 """
 import os
 import logging
@@ -90,7 +96,7 @@ class IngestionService:
         self._llm = None
         self._llm_transformer = None
 
-        logger.info("IngestionService initialized (singleton)")
+        logger.info(f"[수집] 초기화 완료 - 디바이스: {self._device}, 이미지 저장: {self.image_storage_dir}")
 
     @staticmethod
     def _get_device() -> str:
@@ -122,7 +128,7 @@ class IngestionService:
                     }
                 )
             except ImportError:
-                logger.warning("Docling not available - using fallback parser only")
+                logger.warning("[수집] Docling 사용 불가 - PyPDF 폴백만 사용")
                 self._converter = None
         return self._converter
 
@@ -204,8 +210,10 @@ class IngestionService:
 
     async def save_file(self, file: UploadFile, kb_id: str, user_id: int) -> Tuple[str, str]:
         """
-        파일을 안전하게 저장하고 파일 경로와 원본 파일명을 반환합니다.
-        비동기 파일 I/O 사용
+        파일을 안전하게 저장하고 파일 경로와 원본 파일명을 반환
+
+        경로 탐색 공격 방지를 위해 UUID 기반 파일명 사용
+        비동기 파일 I/O로 대용량 파일도 효율적으로 처리
         """
         original_filename = file.filename or "unknown"
         safe_filename = self._get_safe_filename(original_filename)
@@ -222,11 +230,12 @@ class IngestionService:
                         break
                     await buffer.write(chunk)
 
-            logger.info(f"File saved: {original_filename} -> {safe_filename}")
+            file_size_mb = file_path.stat().st_size / (1024 * 1024)
+            logger.info(f"[수집] 파일 저장 완료: {original_filename} ({file_size_mb:.2f}MB) -> {safe_filename}")
             return str(file_path), original_filename
 
         except Exception as e:
-            logger.error(f"File save failed: {e}")
+            logger.error(f"[수집] 파일 저장 실패: {e}")
             # 실패 시 파일 정리
             if file_path.exists():
                 file_path.unlink()
@@ -245,11 +254,15 @@ class IngestionService:
         qdrant_client=None,
     ):
         """
-        백그라운드에서 파일을 처리합니다.
-        처리 완료 후 임시 파일을 삭제합니다.
-        이미지 파일도 처리하여 CLIP 임베딩으로 인덱싱합니다.
+        백그라운드에서 파일을 처리 (비동기 파이프라인)
+
+        처리 단계:
+        1. 파일 타입 확인 (문서 vs 이미지)
+        2. 문서: 파싱 → 청킹 → 임베딩 → 인덱싱
+        3. 이미지: 저장 → CLIP 임베딩 → 인덱싱
+        4. 임시 파일 정리
         """
-        logger.info(f"[Background] Processing started: {original_filename} (method={chunking_method})")
+        logger.info(f"[수집] 백그라운드 처리 시작: {original_filename} (청킹={chunking_method}, 임계값={semantic_threshold})")
 
         # 설정값 또는 기본값 사용
         chunk_size = chunk_size or settings.RAG_CHUNK_SIZE
@@ -267,7 +280,7 @@ class IngestionService:
         try:
             # 파일 존재 확인
             if not file_path_obj.exists():
-                logger.error(f"File not found: {file_path}")
+                logger.error(f"[수집] 파일 없음: {file_path}")
                 return
 
             # 파일 확장자 확인
@@ -276,7 +289,7 @@ class IngestionService:
 
             if is_image:
                 # 이미지 파일 직접 처리
-                logger.info(f"Processing image file: {original_filename}")
+                logger.info(f"[수집] 이미지 파일 처리 중: {original_filename}")
                 saved_image_path = await self._process_image_file(file_path, kb_id, original_filename)
 
                 if saved_image_path:
@@ -287,9 +300,9 @@ class IngestionService:
                         kb_id,
                         qdrant_client=qdrant_client
                     )
-                    logger.info(f"Image indexed: {original_filename}")
+                    logger.info(f"[수집] 이미지 인덱싱 완료: {original_filename}")
                 else:
-                    logger.warning(f"Failed to process image: {original_filename}")
+                    logger.warning(f"[수집] 이미지 처리 실패: {original_filename}")
 
             else:
                 # 문서 파싱 및 청킹 (이미지 추출 포함)
@@ -304,11 +317,12 @@ class IngestionService:
                 )
 
                 if not final_splits and not extracted_images:
-                    logger.warning(f"No content extracted from: {original_filename}")
+                    logger.warning(f"[수집] 추출된 콘텐츠 없음: {original_filename}")
                     return
 
                 # 텍스트 청크 처리
                 if final_splits:
+                    logger.info(f"[수집] 텍스트 청크 {len(final_splits)}개 처리 중...")
                     # 메타데이터 추가
                     for idx, split in enumerate(final_splits):
                         split.metadata.update(base_metadata)
@@ -318,9 +332,9 @@ class IngestionService:
                     texts = [s.page_content for s in final_splits]
                     metadatas = [s.metadata for s in final_splits]
 
-                    # 벡터 DB 저장 (BGE + BM25)
+                    # 벡터 DB 저장 (BGE-m3 dense + BM25 sparse)
                     await self.vector_service.add_documents(kb_id, texts, metadatas, qdrant_client=qdrant_client)
-                    logger.info(f"Vector Store saved: {len(texts)} text chunks")
+                    logger.info(f"[수집] 벡터 DB 저장 완료: {len(texts)}개 텍스트 청크 (BGE + BM25)")
 
                     # CLIP 텍스트 임베딩 추가
                     await self._add_clip_text_embeddings(
@@ -339,10 +353,10 @@ class IngestionService:
                         qdrant_client=qdrant_client
                     )
 
-            logger.info(f"Processing completed: {original_filename}")
+            logger.info(f"[수집] 백그라운드 처리 완료: {original_filename} ✓")
 
         except Exception as e:
-            logger.error(f"Processing failed for {original_filename}: {e}", exc_info=True)
+            logger.error(f"[수집] 백그라운드 처리 실패 ({original_filename}): {e}", exc_info=True)
 
         finally:
             # 임시 파일 삭제
@@ -388,17 +402,17 @@ class IngestionService:
                     pil_image.save(str(image_path), format="PNG")
                     image_paths.append(str(image_path))
 
-                    logger.debug(f"Saved image {idx+1}/{len(pictures)}: {image_filename}")
+                    logger.debug(f"[수집] 이미지 저장: {idx+1}/{len(pictures)} - {image_filename}")
 
                 except Exception as e:
-                    logger.warning(f"Failed to save image {idx}: {e}")
+                    logger.warning(f"[수집] 이미지 저장 실패 (#{idx}): {e}")
                     continue
 
-            logger.info(f"Extracted {len(image_paths)} images from {doc_name}")
+            logger.info(f"[수집] 이미지 추출 완료: {doc_name}에서 {len(image_paths)}개")
             return image_paths
 
         except Exception as e:
-            logger.error(f"Image extraction failed: {e}")
+            logger.error(f"[수집] 이미지 추출 실패: {e}")
             return []
 
     async def _process_image_file(
@@ -408,7 +422,12 @@ class IngestionService:
         original_filename: str,
     ) -> Optional[str]:
         """
-        직접 업로드된 이미지 파일 처리
+        직접 업로드된 이미지 파일 처리 (.jpg, .png 등)
+
+        처리 과정:
+        1. 이미지 유효성 검증
+        2. RGB 모드로 변환 (투명도 처리)
+        3. 영구 저장소에 복사 (kb_{kb_id}/ 폴더)
 
         Args:
             file_path: 임시 파일 경로
@@ -416,7 +435,7 @@ class IngestionService:
             original_filename: 원본 파일명
 
         Returns:
-            저장된 이미지 파일 경로 (None if failed)
+            저장된 이미지 파일 경로 (실패 시 None)
         """
         try:
             from PIL import Image
@@ -452,15 +471,16 @@ class IngestionService:
             image_filename = f"{image_id}{ext}"
             image_path = kb_image_dir / image_filename
 
-            # 저장
+            # 저장 (고품질 JPEG 또는 원본 포맷)
             save_format = "JPEG" if ext in [".jpg", ".jpeg"] else ext[1:].upper()
             img.save(str(image_path), format=save_format, quality=95)
 
-            logger.info(f"Saved image file: {original_filename} -> {image_filename}")
+            file_size_kb = image_path.stat().st_size / 1024
+            logger.info(f"[수집] 이미지 저장 완료: {original_filename} ({file_size_kb:.1f}KB) -> {image_filename}")
             return str(image_path)
 
         except Exception as e:
-            logger.error(f"Image file processing failed: {e}")
+            logger.error(f"[수집] 이미지 파일 처리 실패: {e}")
             return None
 
     async def _parse_and_chunk(
@@ -482,10 +502,10 @@ class IngestionService:
         final_splits = []
         image_paths = []
 
-        # Strategy 1: Docling 사용
+        # Strategy 1: Docling 사용 (고급 파싱: 테이블, OCR, 이미지 추출)
         if self.converter:
             try:
-                logger.info("Parsing with Docling...")
+                logger.info("[수집] Docling으로 파싱 중...")
                 loop = asyncio.get_event_loop()
                 conversion_result = await loop.run_in_executor(
                     None, self.converter.convert, file_path
@@ -495,7 +515,7 @@ class IngestionService:
 
                 # 이미지 추출
                 if hasattr(doc, 'pictures') and doc.pictures:
-                    logger.info(f"Found {len(doc.pictures)} images in document")
+                    logger.info(f"[수집] 문서에서 {len(doc.pictures)}개 이미지 발견")
                     image_paths = await self._extract_docling_images(
                         doc.pictures, kb_id, original_filename
                     )
@@ -510,11 +530,11 @@ class IngestionService:
                         return final_splits, image_paths
 
             except Exception as e:
-                logger.warning(f"Docling parsing failed: {e}")
+                logger.warning(f"[수집] Docling 파싱 실패: {e}, PyPDF 폴백 사용")
 
-        # Strategy 2: PyPDF Fallback
+        # Strategy 2: PyPDF Fallback (단순 텍스트 추출)
         try:
-            logger.info("Falling back to PyPDF...")
+            logger.info("[수집] PyPDF로 폴백 파싱 중...")
             loader = PyPDFLoader(file_path)
             loop = asyncio.get_event_loop()
             raw_docs = await loop.run_in_executor(None, loader.load)
@@ -532,7 +552,7 @@ class IngestionService:
                     final_splits = text_splitter.create_documents([full_text])
 
         except Exception as e:
-            logger.error(f"PyPDF parsing failed: {e}")
+            logger.error(f"[수집] PyPDF 파싱 실패: {e}")
 
         return final_splits, image_paths
 
@@ -568,10 +588,16 @@ class IngestionService:
         text: str,
         semantic_threshold: float = 0.75,
     ) -> List[Document]:
-        """시맨틱 청킹: 의미 변화 지점에서 텍스트를 분할"""
+        """
+        시맨틱 청킹: 의미 변화 지점에서 텍스트를 분할
+
+        임베딩 유사도를 기반으로 자연스러운 문맥 경계에서 분할
+        고정 크기 분할보다 의미적으로 일관된 청크 생성
+        """
         try:
             from langchain_experimental.text_splitter import SemanticChunker
 
+            logger.info(f"[수집] 시맨틱 청킹 시작 (임계값={semantic_threshold})...")
             embeddings = self.vector_service.embeddings
             chunker = SemanticChunker(
                 embeddings=embeddings,
@@ -579,13 +605,13 @@ class IngestionService:
                 breakpoint_threshold_amount=semantic_threshold * 100,
             )
             documents = chunker.create_documents([text])
-            logger.info(f"Semantic chunking produced {len(documents)} chunks")
+            logger.info(f"[수집] 시맨틱 청킹 완료: {len(documents)}개 청크 생성")
             return documents
 
         except ImportError:
-            logger.warning("langchain_experimental not available, falling back to fixed-size chunking")
+            logger.warning("[수집] langchain_experimental 미설치 - 고정 크기 청킹으로 폴백")
         except Exception as e:
-            logger.warning(f"Semantic chunking failed: {e}, falling back to fixed-size chunking")
+            logger.warning(f"[수집] 시맨틱 청킹 실패: {e} - 고정 크기 청킹으로 폴백")
 
         # 폴백: 고정 크기 분할
         text_splitter = RecursiveCharacterTextSplitter(
@@ -602,7 +628,10 @@ class IngestionService:
         qdrant_client=None,
     ):
         """
-        텍스트 청크에 CLIP 텍스트 임베딩 추가
+        텍스트 청크에 CLIP 텍스트 임베딩 추가 (크로스 모달 검색용)
+
+        CLIP 텍스트 임베딩을 생성하여 Qdrant의 "clip" 벡터로 저장합니다.
+        이를 통해 텍스트 쿼리로 관련 이미지를 검색할 수 있습니다.
 
         Args:
             texts: 텍스트 리스트
@@ -611,7 +640,7 @@ class IngestionService:
             qdrant_client: Qdrant 클라이언트 (선택)
         """
         try:
-            logger.info(f"Generating CLIP text embeddings for {len(texts)} chunks...")
+            logger.info(f"[수집] CLIP 텍스트 임베딩 생성 중: {len(texts)}개 청크...")
 
             # CLIP 텍스트 임베딩 생성 (배치)
             loop = asyncio.get_event_loop()
@@ -637,13 +666,13 @@ class IngestionService:
                 user_id=user_id,
             )
 
-            # CLIP 벡터 업데이트 (메타데이터로 매칭)
+            # CLIP 벡터 업데이트 (기존 포인트에 clip 벡터 추가)
             await store.add_clip_text_vectors(texts, clip_vectors, metadatas)
 
-            logger.info(f"Added CLIP text embeddings to {len(texts)} chunks")
+            logger.info(f"[수집] CLIP 텍스트 임베딩 추가 완료: {len(texts)}개 청크")
 
         except Exception as e:
-            logger.warning(f"Failed to add CLIP text embeddings: {e}")
+            logger.warning(f"[수집] CLIP 텍스트 임베딩 추가 실패: {e}")
 
     async def _index_images(
         self,
@@ -655,6 +684,13 @@ class IngestionService:
         """
         이미지들을 CLIP으로 임베딩하여 Qdrant에 인덱싱
 
+        처리 과정:
+        1. CLIP 이미지 임베딩 생성 (512-dim)
+        2. 이미지 캡션 생성 (BLIP, 선택적)
+        3. OCR 텍스트 추출 (EasyOCR, 선택적)
+        4. 썸네일 생성 (웹 표시용)
+        5. Qdrant에 저장 (content_type="image")
+
         Args:
             image_paths: 이미지 파일 경로 리스트
             base_metadata: 기본 메타데이터
@@ -665,7 +701,7 @@ class IngestionService:
             return
 
         try:
-            logger.info(f"Indexing {len(image_paths)} images with CLIP...")
+            logger.info(f"[수집] 이미지 인덱싱 시작: {len(image_paths)}개 (CLIP + 캡셔닝 + OCR)...")
 
             # CLIP 이미지 임베딩 생성 (배치)
             loop = asyncio.get_event_loop()
@@ -676,7 +712,7 @@ class IngestionService:
             )
 
             if not clip_vectors:
-                logger.warning("No CLIP vectors generated")
+                logger.warning("[수집] CLIP 벡터 생성 실패 - 이미지 인덱싱 건너뜀")
                 return
 
             # 이미지 캡션 생성 (배치, 설정에 따라 활성화)
@@ -744,21 +780,32 @@ class IngestionService:
                     width, height = img.size
                     file_size = path_obj.stat().st_size
                 except Exception as e:
-                    logger.warning(f"Failed to get image info for {path}: {e}")
+                    logger.warning(f"[수집] 이미지 정보 조회 실패 ({path_obj.name}): {e}")
                     width, height = 0, 0
                     file_size = 0
+
+                # 웹 경로 변환 (/images/kb_xxx/file.png)
+                storage_dir = Path(self.settings.IMAGE_STORAGE_DIR)
+                relative_image_path = path_obj.relative_to(storage_dir)
+                web_image_path = f"/images/{relative_image_path.as_posix()}"
+
+                web_thumbnail_path = ""
+                if thumbnail:
+                    thumbnail_obj = Path(thumbnail)
+                    relative_thumb_path = thumbnail_obj.relative_to(storage_dir)
+                    web_thumbnail_path = f"/images/{relative_thumb_path.as_posix()}"
 
                 # 메타데이터 구성
                 metadata = {
                     **base_metadata,
                     "content_type": "image",
-                    "image_path": str(path),
+                    "image_path": web_image_path,  # Web URL 경로
                     "image_filename": path_obj.name,
                     "image_size": file_size,
                     "image_dimensions": f"{width}x{height}",
                     "caption": caption if caption else "",  # BLIP 캡션
                     "ocr_text": ocr_text if ocr_text else "",  # OCR 추출 텍스트
-                    "thumbnail_path": str(thumbnail) if thumbnail else "",  # 썸네일 경로
+                    "thumbnail_path": web_thumbnail_path,  # Web URL 경로
                 }
 
                 # page_content는 캡션 + OCR 텍스트 + 파일명
@@ -779,17 +826,23 @@ class IngestionService:
             # Qdrant에 이미지 문서 추가
             await store.add_image_documents(image_docs)
 
-            logger.info(f"Indexed {len(image_docs)} images successfully")
+            logger.info(f"[수집] 이미지 인덱싱 완료: {len(image_docs)}개 성공 ✓")
 
         except Exception as e:
-            logger.error(f"Failed to index images: {e}", exc_info=True)
+            logger.error(f"[수집] 이미지 인덱싱 실패: {e}", exc_info=True)
 
     async def _save_to_graph(self, splits: List[Document], base_metadata: dict):
-        """그래프 DB에 저장"""
+        """
+        그래프 DB에 저장 (Neo4j)
+
+        LLM을 사용하여 텍스트에서 엔티티와 관계를 추출한 후
+        Neo4j에 그래프로 저장합니다. 사용자별/KB별로 격리됩니다.
+        """
         if not splits:
             return
 
         try:
+            logger.info(f"[수집] 그래프 변환 시작: {len(splits)}개 청크...")
             # CPU-bound 작업을 스레드풀에서 실행
             loop = asyncio.get_event_loop()
             graph_docs = await loop.run_in_executor(
@@ -804,19 +857,23 @@ class IngestionService:
             kb_id = base_metadata.get("kb_id", "default")
             user_id = base_metadata.get("user_id", -1)
             self.graph_service.add_graph_documents_with_metadata(graph_docs, kb_id, user_id)
-            logger.info("Graph Store saved (with kb_id/user_id tags)")
+            logger.info(f"[수집] 그래프 DB 저장 완료: kb={kb_id}, user={user_id}")
 
         except Exception as e:
-            logger.warning(f"Graph store failed: {e}")
+            logger.warning(f"[수집] 그래프 DB 저장 실패: {e}")
 
     async def _cleanup_file(self, file_path: Path):
-        """임시 파일 정리"""
+        """
+        임시 파일 정리 (디스크 공간 절약)
+
+        업로드된 파일을 처리한 후 임시 디렉토리에서 삭제합니다.
+        """
         try:
             if file_path.exists():
                 file_path.unlink()
-                logger.info(f"Temporary file deleted: {file_path}")
+                logger.debug(f"[수집] 임시 파일 삭제: {file_path.name}")
         except Exception as e:
-            logger.warning(f"Failed to delete temp file: {e}")
+            logger.warning(f"[수집] 임시 파일 삭제 실패: {e}")
 
 
 @lru_cache()

@@ -30,11 +30,15 @@ class ImageCaptioningService:
         self._processor = None
         self._model = None
         self._device = self._get_device()
-        logger.info(f"ImageCaptioningService initialized (device: {self._device})")
+        logger.info(f"[BLIP] 초기화 완료 - 사용 디바이스: {self._device}")
 
     @staticmethod
     def _get_device() -> str:
-        """사용 가능한 디바이스 반환"""
+        """
+        사용 가능한 디바이스 반환 (CUDA > MPS > CPU 순서로 탐색)
+
+        GPU가 있으면 추론 속도가 10배 이상 빨라집니다.
+        """
         try:
             import torch
             if torch.cuda.is_available():
@@ -46,7 +50,13 @@ class ImageCaptioningService:
         return "cpu"
 
     def _load_model(self):
-        """BLIP 모델 지연 로딩"""
+        """
+        BLIP 모델 지연 로딩 (첫 사용 시에만 메모리에 로드)
+
+        Salesforce BLIP-base 모델 사용:
+        - 이미지 → 자연어 설명 자동 생성
+        - 멀티모달 검색 품질 향상에 기여
+        """
         if self._model is not None:
             return
 
@@ -54,7 +64,7 @@ class ImageCaptioningService:
             from transformers import BlipProcessor, BlipForConditionalGeneration
             import torch
 
-            logger.info("Loading BLIP captioning model...")
+            logger.info("[BLIP] 모델 로딩 시작: Salesforce/blip-image-captioning-base")
 
             # BLIP base 모델 (가볍고 빠름)
             model_name = "Salesforce/blip-image-captioning-base"
@@ -69,10 +79,10 @@ class ImageCaptioningService:
             # 평가 모드
             self._model.eval()
 
-            logger.info(f"BLIP model loaded successfully on {self._device}")
+            logger.info(f"[BLIP] 모델 로딩 완료 - 디바이스: {self._device}")
 
         except Exception as e:
-            logger.error(f"Failed to load BLIP model: {e}")
+            logger.error(f"[BLIP] 모델 로딩 실패: {e}")
             self._model = None
             self._processor = None
 
@@ -83,28 +93,35 @@ class ImageCaptioningService:
         min_length: int = 10,
     ) -> str:
         """
-        이미지에 대한 캡션 생성
+        단일 이미지에 대한 자연어 캡션 생성
+
+        이미지를 BLIP 모델에 입력하여 자동으로 설명을 생성합니다.
+        예: "a cat sitting on a couch", "a person riding a bike"
+
+        생성된 캡션은 텍스트 임베딩과 함께 저장되어
+        텍스트 쿼리로도 이미지를 검색할 수 있게 합니다.
 
         Args:
-            image_path: 이미지 파일 경로
-            max_length: 최대 캡션 길이
-            min_length: 최소 캡션 길이
+            image_path: 이미지 파일 경로 (JPG, PNG 등)
+            max_length: 최대 캡션 길이 (토큰 단위)
+            min_length: 최소 캡션 길이 (토큰 단위)
 
         Returns:
-            생성된 캡션 (실패 시 빈 문자열)
+            생성된 영어 캡션 문자열 (실패 시 빈 문자열)
         """
         try:
             self._load_model()
 
             if self._model is None or self._processor is None:
-                logger.warning("BLIP model not available")
+                logger.warning("[BLIP] 모델 사용 불가 - 캡션 생성 건너뜀")
                 return ""
 
             from PIL import Image
             import torch
 
-            # 이미지 로드
+            # 이미지 로드 및 RGB 변환
             image = Image.open(image_path).convert("RGB")
+            logger.debug(f"[BLIP] 캡션 생성 시작: {Path(image_path).name}")
 
             # 전처리
             inputs = self._processor(image, return_tensors="pt")
@@ -126,11 +143,11 @@ class ImageCaptioningService:
             # 디코딩
             caption = self._processor.decode(output[0], skip_special_tokens=True)
 
-            logger.debug(f"Generated caption: {caption}")
+            logger.debug(f"[BLIP] 캡션 생성 완료: \"{caption}\"")
             return caption.strip()
 
         except Exception as e:
-            logger.error(f"Caption generation failed for {image_path}: {e}")
+            logger.error(f"[BLIP] 캡션 생성 실패 ({Path(image_path).name}): {e}")
             return ""
 
     def generate_captions_batch(
@@ -141,24 +158,28 @@ class ImageCaptioningService:
         batch_size: int = 4,
     ) -> List[str]:
         """
-        여러 이미지에 대한 캡션 배치 생성
+        여러 이미지에 대한 캡션 배치 생성 (성능 최적화)
+
+        배치 처리를 통해 GPU 활용도를 높이고 속도를 향상시킵니다.
+        여러 이미지를 한 번에 모델에 입력하여 추론 시간을 단축합니다.
 
         Args:
             image_paths: 이미지 파일 경로 리스트
-            max_length: 최대 캡션 길이
-            min_length: 최소 캡션 길이
-            batch_size: 배치 크기
+            max_length: 최대 캡션 길이 (토큰 단위)
+            min_length: 최소 캡션 길이 (토큰 단위)
+            batch_size: 배치 크기 (GPU 메모리에 따라 조정)
 
         Returns:
-            생성된 캡션 리스트
+            생성된 캡션 리스트 (각 이미지당 하나씩, 순서 보장)
         """
         captions = []
 
         try:
+            logger.info(f"[BLIP] 배치 캡션 생성 시작: {len(image_paths)}개 이미지")
             self._load_model()
 
             if self._model is None or self._processor is None:
-                logger.warning("BLIP model not available, skipping captions")
+                logger.warning("[BLIP] 모델 사용 불가 - 캡션 생성 건너뜀")
                 return [""] * len(image_paths)
 
             from PIL import Image
@@ -175,7 +196,7 @@ class ImageCaptioningService:
                         img = Image.open(path).convert("RGB")
                         batch_images.append(img)
                     except Exception as e:
-                        logger.warning(f"Failed to load image {path}: {e}")
+                        logger.warning(f"[BLIP] 이미지 로드 실패 ({Path(path).name}): {e}, 건너뜀")
                         batch_images.append(None)
 
                 # 유효한 이미지만 처리
@@ -213,15 +234,20 @@ class ImageCaptioningService:
                     else:
                         captions.append("")
 
-            logger.info(f"Generated {len(captions)} captions")
+            logger.info(f"[BLIP] 배치 캡션 생성 완료: {len(captions)}개")
             return captions
 
         except Exception as e:
-            logger.error(f"Batch caption generation failed: {e}")
+            logger.error(f"[BLIP] 배치 캡션 생성 실패: {e}")
             return [""] * len(image_paths)
 
 
 @lru_cache()
 def get_image_captioning_service() -> ImageCaptioningService:
-    """싱글톤 ImageCaptioningService 인스턴스 반환"""
+    """
+    싱글톤 ImageCaptioningService 인스턴스 반환
+
+    애플리케이션 전체에서 하나의 BLIP 모델 인스턴스만 사용하여
+    메모리를 절약하고 초기화 시간을 단축합니다.
+    """
     return ImageCaptioningService()

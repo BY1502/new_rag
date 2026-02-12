@@ -211,22 +211,8 @@ export default function AdvancedSettings() {
 
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           {activeTab === 'general' && <div className="space-y-8 max-w-2xl">
-            <section>
-              <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 mb-2">테마 설정</label>
-              <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800">
-                <div className="flex items-center gap-3">
-                  {localConfig.theme === 'Dark' ? <Moon size={20} className="text-indigo-400"/> : <Sun size={20} className="text-yellow-500"/>}
-                  <div>
-                    <div className="text-sm font-bold text-gray-800 dark:text-gray-100">{localConfig.theme === 'Dark' ? '다크 모드' : '라이트 모드'}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{localConfig.theme === 'Dark' ? '어두운 배경으로 눈의 피로를 줄입니다.' : '밝은 배경으로 기본 테마입니다.'}</div>
-                  </div>
-                </div>
-                <button onClick={() => setLocalConfig({...localConfig, theme: localConfig.theme === 'Dark' ? 'Light' : 'Dark'})} className={`w-12 h-6 rounded-full transition-colors relative ${localConfig.theme === 'Dark' ? 'bg-indigo-600' : 'bg-gray-300'}`}>
-                  <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${localConfig.theme === 'Dark' ? 'left-7' : 'left-1'}`}></div>
-                </button>
-              </div>
-            </section>
-            <section><label className="block text-sm font-bold text-gray-800 dark:text-gray-200 mb-2">시스템 언어</label><div className="w-full p-2.5 border rounded-lg text-sm bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-medium cursor-not-allowed flex items-center justify-between border-gray-200 dark:border-gray-700"><span>한국어 (Korean)</span><span className="text-xs px-2 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-400">고정됨</span></div><p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">이 프로젝트는 한국어 환경에 최적화되어 있습니다.</p></section>
+            {/* 다크모드 기능 비활성화 - 라이트 테마 전용 */}
+            <section><label className="block text-sm font-bold text-gray-800 mb-2">시스템 언어</label><div className="w-full p-2.5 border rounded-lg text-sm bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-medium cursor-not-allowed flex items-center justify-between border-gray-200 dark:border-gray-700"><span>한국어 (Korean)</span><span className="text-xs px-2 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-400">고정됨</span></div><p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">이 프로젝트는 한국어 환경에 최적화되어 있습니다.</p></section>
           </div>}
           
           {activeTab === 'model' && <div className="space-y-8 max-w-2xl">

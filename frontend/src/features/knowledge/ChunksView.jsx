@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { knowledgeAPI } from '../../api/client';
-import { Search, Loader2, ChevronDown, ChevronUp, FileText, Layers, Hash, AlertCircle, X, Folder } from '../../components/ui/Icon';
+import { Search, Loader2, ChevronDown, ChevronUp, FileText, Layers, Hash, AlertCircle, X, Folder, Image as ImageIcon, Eye } from '../../components/ui/Icon';
 
 export default function ChunksView({ kbId }) {
   // 파일 목록
@@ -18,6 +18,7 @@ export default function ChunksView({ kbId }) {
   const [expandedId, setExpandedId] = useState(null);
   const [error, setError] = useState(null);
   const searchTimer = useRef(null);
+  const [lightboxImage, setLightboxImage] = useState(null); // 이미지 확대보기
 
   // 파일 목록 로드
   useEffect(() => {
@@ -88,13 +89,15 @@ export default function ChunksView({ kbId }) {
     : null;
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex bg-gray-50">
       {/* 왼쪽: 파일 사이드바 */}
-      <div className="w-64 border-r bg-gray-50/50 flex flex-col shrink-0">
-        <div className="h-12 border-b flex items-center px-4 gap-2 shrink-0">
-          <Folder size={15} className="text-gray-400" />
-          <span className="text-xs font-bold text-gray-500">소스 파일</span>
-          <span className="ml-auto text-[11px] text-gray-400 font-bold">{files.length}개</span>
+      <div className="w-72 border-r border-gray-200 bg-white flex flex-col shrink-0">
+        <div className="h-14 border-b border-gray-200 flex items-center px-5 gap-3 shrink-0 bg-gray-50">
+          <div className="p-2 rounded-lg bg-blue-600">
+            <Folder size={16} className="text-white" />
+          </div>
+          <span className="text-sm font-bold text-gray-900">소스 파일</span>
+          <span className="ml-auto text-xs text-gray-600 font-semibold bg-gray-100 px-2.5 py-1 rounded-full">{files.length}</span>
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -108,21 +111,23 @@ export default function ChunksView({ kbId }) {
               <p className="text-xs">업로드된 파일이 없습니다</p>
             </div>
           ) : (
-            <div className="p-2 space-y-0.5">
+            <div className="p-3 space-y-1">
               {/* 전체 보기 */}
               <button
                 onClick={() => handleSelectFile(null)}
-                className={`w-full text-left px-3 py-2.5 rounded-lg text-xs transition-all ${
+                className={`group w-full text-left px-4 py-3 rounded-lg text-sm transition-all ${
                   selectedSource === null
-                    ? 'bg-orange-50 text-orange-700 font-bold border border-orange-200'
-                    : 'text-gray-600 hover:bg-gray-100 font-medium'
+                    ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                    : 'text-gray-700 hover:bg-gray-50 font-medium'
                 }`}
               >
-                <div className="flex items-center gap-2">
-                  <Layers size={13} className={selectedSource === null ? 'text-orange-500' : 'text-gray-400'} />
+                <div className="flex items-center gap-3">
+                  <div className={`p-1.5 rounded-lg transition-all ${selectedSource === null ? 'bg-blue-500' : 'bg-gray-100 group-hover:bg-gray-200'}`}>
+                    <Layers size={14} className={selectedSource === null ? 'text-white' : 'text-gray-600'} />
+                  </div>
                   <span className="truncate">전체 파일</span>
-                  <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                    selectedSource === null ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'
+                  <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-semibold transition-all ${
+                    selectedSource === null ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
                   }`}>
                     {totalChunks}
                   </span>
@@ -134,18 +139,20 @@ export default function ChunksView({ kbId }) {
                 <button
                   key={file.source}
                   onClick={() => handleSelectFile(file.source)}
-                  className={`w-full text-left px-3 py-2.5 rounded-lg text-xs transition-all ${
+                  className={`group w-full text-left px-4 py-3 rounded-lg text-sm transition-all ${
                     selectedSource === file.source
-                      ? 'bg-orange-50 text-orange-700 font-bold border border-orange-200'
-                      : 'text-gray-600 hover:bg-gray-100 font-medium'
+                      ? 'bg-purple-600 text-white font-semibold shadow-sm'
+                      : 'text-gray-700 hover:bg-gray-50 font-medium'
                   }`}
                   title={file.source}
                 >
-                  <div className="flex items-center gap-2">
-                    <FileText size={13} className={selectedSource === file.source ? 'text-orange-500' : 'text-gray-400'} />
+                  <div className="flex items-center gap-3">
+                    <div className={`p-1.5 rounded-lg transition-all ${selectedSource === file.source ? 'bg-purple-500' : 'bg-gray-100 group-hover:bg-gray-200'}`}>
+                      <FileText size={14} className={selectedSource === file.source ? 'text-white' : 'text-gray-600'} />
+                    </div>
                     <span className="truncate flex-1">{file.filename}</span>
-                    <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                      selectedSource === file.source ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'
+                    <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-semibold transition-all ${
+                      selectedSource === file.source ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
                     }`}>
                       {file.chunk_count}
                     </span>
@@ -160,39 +167,39 @@ export default function ChunksView({ kbId }) {
       {/* 오른쪽: 청크 리스트 */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* 상단 바 */}
-        <div className="h-12 border-b flex items-center justify-between px-4 bg-white shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="h-16 border-b border-gray-200 flex items-center justify-between px-6 bg-white shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
             {selectedSource && (
               <button
                 onClick={() => handleSelectFile(null)}
-                className="shrink-0 flex items-center gap-1 text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-lg hover:bg-orange-100 transition"
+                className="shrink-0 flex items-center gap-2 text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 px-3 py-2 rounded-lg transition-colors shadow-sm"
               >
-                <FileText size={12} />
+                <FileText size={13} />
                 <span className="max-w-[120px] truncate">{selectedFileName}</span>
-                <X size={12} />
+                <X size={13} />
               </button>
             )}
-            <div className="relative w-56">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <div className="relative w-64">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
                 placeholder="시맨틱 검색..."
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none bg-white"
+                className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
               />
             </div>
             {searchQuery && (
               <button
                 onClick={() => { setSearchQuery(''); fetchChunks(null, null, selectedSource); }}
-                className="text-[11px] text-gray-400 hover:text-gray-600 font-bold transition"
+                className="text-sm text-gray-600 hover:text-gray-900 font-semibold transition-colors"
               >
                 초기화
               </button>
             )}
           </div>
-          <span className="text-[11px] font-bold text-gray-400 bg-gray-50 px-2.5 py-1 rounded-full flex items-center gap-1">
-            <Layers size={12} /> {total}개 청크
+          <span className="text-sm font-semibold text-gray-900 bg-gray-100 px-4 py-2 rounded-full flex items-center gap-2">
+            <Layers size={14} className="text-gray-600" /> {total}개
           </span>
         </div>
 
@@ -231,63 +238,130 @@ export default function ChunksView({ kbId }) {
             <div className="space-y-1.5">
               {chunks.map((chunk) => {
                 const isExpanded = expandedId === chunk.id;
+                const isImage = chunk.content_type === 'image';
                 const preview = chunk.text.length > 200 ? chunk.text.slice(0, 200) + '...' : chunk.text;
                 const fileName = chunk.source ? chunk.source.split('/').pop().split('\\').pop() : 'unknown';
+                const thumbnailUrl = chunk.thumbnail_path ? `http://localhost:8000${chunk.thumbnail_path}` : null;
+                const fullImageUrl = chunk.image_path ? `http://localhost:8000${chunk.image_path}` : null;
 
                 return (
                   <div
                     key={chunk.id}
-                    className={`bg-white border rounded-xl transition-all hover:shadow-sm cursor-pointer ${isExpanded ? 'border-orange-200 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
+                    className={`group bg-white border rounded-lg transition-all cursor-pointer ${
+                      isExpanded
+                        ? 'border-blue-400 shadow-md'
+                        : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                    }`}
                     onClick={() => setExpandedId(isExpanded ? null : chunk.id)}
                   >
                     {/* 헤더 */}
-                    <div className="flex items-center gap-2.5 px-3 py-2.5">
-                      <span className="shrink-0 w-9 h-9 bg-orange-50 text-orange-600 rounded-lg flex items-center justify-center text-xs font-bold">
-                        #{chunk.chunk_index}
+                    <div className="flex items-center gap-3 px-4 py-3.5">
+                      <span className={`shrink-0 w-11 h-11 rounded-lg flex items-center justify-center text-sm font-bold shadow-sm transition-all ${
+                        isImage
+                          ? 'bg-pink-600 text-white'
+                          : 'bg-blue-600 text-white'
+                      }`}>
+                        {isImage ? <ImageIcon size={18} /> : `#${chunk.chunk_index}`}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           {!selectedSource && (
                             <>
-                              <FileText size={12} className="text-gray-400 shrink-0" />
-                              <span className="text-[11px] font-bold text-gray-500 truncate">{fileName}</span>
+                              <div className={`p-1 rounded-lg ${isImage ? 'bg-pink-50' : 'bg-gray-50'}`}>
+                                {isImage ? <ImageIcon size={13} className="text-pink-600 shrink-0" /> : <FileText size={13} className="text-gray-600 shrink-0" />}
+                              </div>
+                              <span className="text-xs font-semibold text-gray-700 truncate">{fileName}</span>
                             </>
                           )}
+                          {isImage && (
+                            <span className="text-xs font-semibold bg-pink-600 text-white px-2.5 py-1 rounded-full">
+                              IMAGE
+                            </span>
+                          )}
                           {chunk.score != null && (
-                            <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">
-                              유사도 {chunk.score}
+                            <span className="text-xs font-semibold bg-blue-600 text-white px-2.5 py-1 rounded-full">
+                              {chunk.score}
                             </span>
                           )}
                         </div>
-                        {!isExpanded && (
-                          <p className="text-xs text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">{preview}</p>
+                        {!isExpanded && !isImage && (
+                          <p className="text-sm text-gray-700 mt-1.5 line-clamp-2 leading-relaxed">{preview}</p>
+                        )}
+                        {!isExpanded && isImage && chunk.caption && (
+                          <p className="text-sm text-gray-700 mt-1.5 line-clamp-1 leading-relaxed italic">{chunk.caption}</p>
                         )}
                       </div>
-                      <div className="shrink-0 text-gray-300">
-                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      <div className={`shrink-0 transition-all ${isExpanded ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'}`}>
+                        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </div>
                     </div>
 
                     {/* 펼친 내용 */}
                     {isExpanded && (
-                      <div className="px-3 pb-3 space-y-2">
-                        <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-700 leading-relaxed whitespace-pre-wrap font-mono border border-gray-100 max-h-72 overflow-y-auto custom-scrollbar">
-                          {chunk.text}
-                        </div>
-                        <div className="flex items-center gap-3 text-[10px] text-gray-400">
-                          <span className="flex items-center gap-1"><Hash size={10} /> ID: {chunk.id.slice(0, 12)}...</span>
+                      <div className="px-4 pb-4 space-y-3">
+                        {isImage ? (
+                          <>
+                            {/* 이미지 표시 */}
+                            {thumbnailUrl && (
+                              <div className="relative group/img">
+                                <img
+                                  src={thumbnailUrl}
+                                  alt={fileName}
+                                  className="w-full max-w-lg mx-auto rounded-lg border-2 border-gray-200 cursor-pointer hover:border-blue-500 transition-all shadow-sm"
+                                  onClick={(e) => { e.stopPropagation(); setLightboxImage(fullImageUrl); }}
+                                />
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setLightboxImage(fullImageUrl); }}
+                                  className="absolute top-3 right-3 p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg opacity-0 group-hover/img:opacity-100 transition-all shadow-sm"
+                                  title="원본 크기로 보기"
+                                >
+                                  <Eye size={16} />
+                                </button>
+                              </div>
+                            )}
+                            {/* 이미지 메타데이터 */}
+                            <div className="bg-pink-50 rounded-lg p-4 space-y-2 text-sm border border-pink-200">
+                              {chunk.caption && (
+                                <div className="flex gap-2">
+                                  <span className="font-semibold text-pink-700 shrink-0">설명:</span>
+                                  <span className="text-gray-700 italic">{chunk.caption}</span>
+                                </div>
+                              )}
+                              {chunk.ocr_text && (
+                                <div className="flex gap-2">
+                                  <span className="font-semibold text-pink-700 shrink-0">텍스트:</span>
+                                  <span className="text-gray-700">{chunk.ocr_text}</span>
+                                </div>
+                              )}
+                              {chunk.image_dimensions && (
+                                <div className="flex gap-2">
+                                  <span className="font-semibold text-pink-700 shrink-0">크기:</span>
+                                  <span className="text-gray-700">{chunk.image_dimensions}</span>
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-mono border border-gray-200 max-h-96 overflow-y-auto custom-scrollbar">
+                            {chunk.text}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-4 text-xs text-gray-600 flex-wrap">
+                          <span className="flex items-center gap-1.5 bg-gray-100 px-2.5 py-1 rounded-lg">
+                            <Hash size={11} /> {chunk.id.slice(0, 12)}...
+                          </span>
                           {!selectedSource && chunk.source && (
                             <button
                               onClick={(e) => { e.stopPropagation(); handleSelectFile(chunk.source); }}
-                              className="text-orange-500 hover:text-orange-700 font-bold transition"
+                              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg font-semibold transition-colors"
                             >
                               이 파일만 보기
                             </button>
                           )}
                           {chunk.metadata?.uploaded_at && (
-                            <span>업로드: {chunk.metadata.uploaded_at}</span>
+                            <span className="bg-gray-100 px-2.5 py-1 rounded-lg">업로드: {chunk.metadata.uploaded_at}</span>
                           )}
-                          <span>길이: {chunk.text.length}자</span>
+                          {!isImage && <span className="bg-gray-100 px-2.5 py-1 rounded-lg">길이: {chunk.text.length}자</span>}
                         </div>
                       </div>
                     )}
@@ -311,6 +385,27 @@ export default function ChunksView({ kbId }) {
           )}
         </div>
       </div>
+
+      {/* 이미지 라이트박스 */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-8"
+          onClick={() => setLightboxImage(null)}
+        >
+          <button
+            onClick={() => setLightboxImage(null)}
+            className="absolute top-6 right-6 p-4 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors shadow-lg"
+          >
+            <X size={28} />
+          </button>
+          <img
+            src={lightboxImage}
+            alt="Full size"
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }

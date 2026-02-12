@@ -10,12 +10,15 @@ RAG AI는 문서 기반 검색 증강 생성(RAG) 시스템입니다.
 ### 핵심 기능
 
 - **RAG 대화**: 지식 베이스 문서 기반 질의응답 (벡터 + 그래프 하이브리드 검색)
+- **멀티모달 검색**: CLIP 기반 이미지+텍스트 크로스 모달 검색 (NEW ✨)
+- **이미지 처리**: 자동 캡셔닝 (BLIP), OCR (EasyOCR), 썸네일 생성 (NEW ✨)
 - **웹 검색 통합**: DuckDuckGo / Brave / Tavily / Google Serper
 - **Text-to-SQL**: 자연어로 데이터베이스 조회
 - **Deep Think**: LLM 자기검증 추론 모드
 - **xLAM**: 자율 실행 에이전트 (물류 도메인)
 - **다중 VDB 지원**: Qdrant (내부/외부) + Pinecone (선택)
 - **지식 그래프**: Neo4j 기반 엔티티/관계 시각화 및 편집
+- **파인튜닝 시스템**: 대화 피드백 수집 및 Ollama 모델 파인튜닝
 
 ### 기술 스택
 
@@ -24,7 +27,8 @@ RAG AI는 문서 기반 검색 증강 생성(RAG) 시스템입니다.
 | 프론트엔드  | React 18 + Vite + Tailwind CSS                     |
 | 백엔드      | FastAPI (Python, 비동기)                           |
 | LLM 추론    | Ollama (로컬) / OpenAI / Anthropic / Google / Groq |
-| 임베딩      | BAAI/bge-m3 (HuggingFace)                          |
+| 임베딩      | BAAI/bge-m3 (텍스트) + OpenAI CLIP (이미지)        |
+| 이미지 처리 | BLIP (캡셔닝), EasyOCR (OCR), Pillow (썸네일)       |
 | 벡터 DB     | Qdrant (기본) / Pinecone (선택)                    |
 | 지식 그래프 | Neo4j                                              |
 | 관계형 DB   | PostgreSQL (메타데이터/사용자 데이터)              |
@@ -270,29 +274,62 @@ KB 선택 후 **목록** 탭에서:
    - Qdrant 저장
    - Neo4j 엔티티 추출 및 그래프 생성
 
-| 지원 파일 형식     |
-| ------------------ |
-| PDF (.pdf)         |
-| Word (.docx, .doc) |
-| 텍스트 (.txt)      |
-| Markdown (.md)     |
-| PowerPoint (.pptx) |
-| Excel (.xlsx)      |
+| 지원 파일 형식           |
+| ------------------------ |
+| **문서**                 |
+| PDF (.pdf)               |
+| Word (.docx, .doc)       |
+| 텍스트 (.txt)            |
+| Markdown (.md)           |
+| PowerPoint (.pptx)       |
+| Excel (.xlsx)            |
+| **이미지** (NEW ✨)      |
+| JPEG (.jpg, .jpeg)       |
+| PNG (.png)               |
+| GIF (.gif)               |
+| WebP (.webp)             |
 
 파일 상태:
 
 - 🟡 **Uploading** — 업로드 중
-- 🔵 **Processing** — 처리 중 (청킹, 임베딩)
+- 🔵 **Processing** — 처리 중 (청킹, 임베딩, 이미지 처리)
 - 🟢 **Ready** — 완료
 - 🔴 **Error** — 실패 (에러 메시지 확인 가능)
+
+### 6.3.1 이미지 파일 업로드 (NEW ✨)
+
+이미지 파일을 직접 업로드하면 자동으로 다음 처리가 수행됩니다:
+
+- **CLIP 임베딩**: 이미지를 512차원 벡터로 변환하여 검색 가능하게 저장
+- **자동 캡셔닝**: BLIP 모델이 이미지 내용을 자연어로 설명 생성
+- **OCR 텍스트 추출**: EasyOCR이 이미지 내 한글/영문 텍스트 추출
+- **썸네일 생성**: 300x300 썸네일 자동 생성 (웹 최적화)
+
+**사용 예시**:
+- 시스템 아키텍처 다이어그램 업로드 → "데이터 흐름 다이어그램 보여줘" 검색 가능
+- 스크린샷 업로드 → 내부 텍스트로 검색 가능
+- PDF 내 이미지 자동 추출 → 차트, 그래프 검색 가능
+
+**멀티모달 검색 활성화**:
+1. ⚙️ 설정 → 고급 설정
+2. "멀티모달 검색 활성화" 토글
+3. 텍스트 질문으로 관련 이미지 검색 가능
 
 ### 6.4 청크 뷰
 
 **청크** 탭에서 문서가 어떻게 분할되었는지 확인할 수 있습니다.
 
+**텍스트 청크**:
 - 각 청크의 텍스트 내용 표시
 - 소스 파일별 필터링
 - 키워드 검색 (시맨틱 검색)
+
+**이미지 청크** (NEW ✨):
+- 썸네일 미리보기
+- 자동 생성된 캡션 표시
+- OCR 추출 텍스트 표시
+- 이미지 크기 및 메타데이터
+- 클릭하여 원본 크기로 확대 보기
 - 페이지네이션
 
 ### 6.5 지식 그래프 뷰
@@ -751,4 +788,62 @@ Redis가 없어도 시스템은 동작합니다 (인메모리 폴백). 캐싱과
 
 ---
 
-_RAG AI System v1.0_
+## 14. 멀티모달 시스템 상세 문서
+
+이미지 검색 및 처리 기능에 대한 상세 문서는 다음을 참고하세요:
+
+### 📚 문서 목록
+
+1. **[MULTIMODAL_QUICKSTART.md](backend/MULTIMODAL_QUICKSTART.md)**
+   - 빠른 설치 및 사용 가이드 (5분)
+   - 코드 예제 및 API 참조
+   - 문제 해결
+
+2. **[MULTIMODAL_GUIDE.md](backend/MULTIMODAL_GUIDE.md)**
+   - 전체 기능 가이드
+   - 설치 및 설정 상세
+   - API 레퍼런스
+   - 성능 벤치마크
+   - 테스트 가이드
+
+3. **[MULTIMODAL_ARCHITECTURE.md](backend/MULTIMODAL_ARCHITECTURE.md)**
+   - 기술 아키텍처 설명
+   - 모델 선택 근거
+   - 임베딩 전략
+   - 데이터 흐름
+   - 성능 최적화 기법
+   - 확장성 및 트레이드오프
+
+### 🎯 빠른 시작
+
+```bash
+# 1. 의존성 설치
+cd backend
+pip install -r requirements.txt
+
+# 2. .env 파일에 이미지 확장자 추가
+# ALLOWED_FILE_EXTENSIONS=.pdf,.docx,.txt,.jpg,.png,.gif,.webp
+
+# 3. DB 마이그레이션
+python migrate_db.py
+
+# 4. 설치 테스트
+python test_image_upload.py
+
+# 5. 백엔드 시작
+uvicorn app.main:app --reload
+```
+
+### 🔍 주요 기능
+
+- **CLIP 이미지 임베딩**: 512차원 벡터로 이미지 검색 가능
+- **자동 캡셔닝**: BLIP 모델이 이미지 설명 생성
+- **OCR 텍스트 추출**: EasyOCR로 한글/영문 텍스트 추출
+- **크로스 모달 검색**: 텍스트 질문으로 이미지 검색, 이미지로 텍스트 검색
+- **파일 뷰어**: 썸네일 미리보기, 메타데이터 표시, 라이트박스 확대
+
+자세한 내용은 상단 문서 링크를 참조하세요.
+
+---
+
+_RAG AI System v1.0 with Multimodal Support_
