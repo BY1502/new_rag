@@ -3,6 +3,7 @@ QdrantStore — Qdrant 벡터 DB 구현체
 기존 VectorStoreService의 검색 로직을 BaseVectorStore 인터페이스로 캡슐화
 Sparse Vector (BM25) + Hybrid Search 지원
 """
+import asyncio
 import json
 import logging
 import uuid
@@ -506,7 +507,10 @@ class QdrantStore(BaseVectorStore):
         image_docs: List[dict],
     ) -> None:
         """
-        이미지 문서를 CLIP 벡터와 함께 Qdrant에 추가
+        이미지 문서를 CLIP + BGE 벡터와 함께 Qdrant에 추가
+
+        이미지의 page_content (캡션 + OCR 텍스트)를 BGE로 임베딩하여
+        텍스트 검색으로도 이미지를 찾을 수 있게 합니다.
 
         Args:
             image_docs: 이미지 문서 리스트
@@ -515,17 +519,25 @@ class QdrantStore(BaseVectorStore):
         try:
             self._ensure_collection()
 
+            # page_content를 BGE로 임베딩 (텍스트 검색 가능하게)
+            contents = [doc["content"] for doc in image_docs]
+            dense_vectors = await asyncio.to_thread(
+                self.embeddings.embed_documents,
+                contents
+            )
+
             points = []
-            for doc in image_docs:
+            for doc, dense_vec in zip(image_docs, dense_vectors):
                 point_id = str(uuid.uuid4())
 
-                # CLIP 벡터만 사용 (dense는 빈 벡터)
-                # Note: Qdrant는 named vector에서 일부만 업데이트 가능
+                # Triple vectors: dense (BGE 1024-dim) + CLIP (512-dim)
+                # BM25 sparse는 텍스트 검색에만 사용하므로 이미지는 제외
                 points.append(
                     models.PointStruct(
                         id=point_id,
                         vector={
-                            "clip": doc["clip_vector"],
+                            "dense": dense_vec,  # BGE: page_content (캡션 + OCR 텍스트)
+                            "clip": doc["clip_vector"],  # CLIP: 이미지 임베딩
                         },
                         payload={
                             "page_content": doc["content"],
@@ -540,7 +552,7 @@ class QdrantStore(BaseVectorStore):
                 points=points
             )
 
-            logger.info(f"Added {len(points)} image documents with CLIP vectors")
+            logger.info(f"Added {len(points)} image documents with dense + CLIP vectors")
 
         except Exception as e:
             logger.error(f"Failed to add image documents: {e}")

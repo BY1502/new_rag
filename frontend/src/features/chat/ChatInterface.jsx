@@ -43,6 +43,7 @@ export default function ChatInterface() {
     addMessage,
     renameSession,
     config,
+    setConfig,
     agents,
     currentAgent,
     setCurrentAgentId,
@@ -69,6 +70,10 @@ export default function ChatInterface() {
   const [useDeepThink, setUseDeepThink] = useState(false);
   const [activeMcpIds, setActiveMcpIds] = useState([]);
   const [selectedKbIds, setSelectedKbIds] = useState([currentKbId]);
+
+  // 모델 선택
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const [availableModels, setAvailableModels] = useState([]);
 
   // SQL 모드
   const [useSql, setUseSql] = useState(false);
@@ -112,17 +117,46 @@ export default function ChatInterface() {
     loadDbConns();
   }, []);
 
+  // 사용 가능한 모델 목록 로드 (마운트 시 + 모델 메뉴 열 때 갱신)
+  const loadAvailableModels = useCallback(async () => {
+    try {
+      const result = await settingsAPI.getAvailableModels();
+      if (result?.models) setAvailableModels(result.models);
+    } catch (e) {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAvailableModels();
+  }, [loadAvailableModels]);
+
+  useEffect(() => {
+    if (isModelMenuOpen) loadAvailableModels();
+  }, [isModelMenuOpen, loadAvailableModels]);
+
   useEffect(() => {
     const handleClickOutside = () => {
       setIsAgentMenuOpen(false);
       setIsKbMenuOpen(false);
       setIsMcpMenuOpen(false);
       setIsDbMenuOpen(false);
+      setIsModelMenuOpen(false);
     };
-    if (isAgentMenuOpen || isKbMenuOpen || isMcpMenuOpen || isDbMenuOpen)
+    if (isAgentMenuOpen || isKbMenuOpen || isMcpMenuOpen || isDbMenuOpen || isModelMenuOpen)
       window.addEventListener("click", handleClickOutside);
     return () => window.removeEventListener("click", handleClickOutside);
-  }, [isAgentMenuOpen, isKbMenuOpen, isMcpMenuOpen, isDbMenuOpen]);
+  }, [isAgentMenuOpen, isKbMenuOpen, isMcpMenuOpen, isDbMenuOpen, isModelMenuOpen]);
+
+  // 세션 전환 시 스트리밍 중단 및 상태 초기화
+  useEffect(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsTyping(false);
+    setIsExtractingFiles(false);
+  }, [currentSessionId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -299,7 +333,7 @@ export default function ChatInterface() {
       await streamChat(
         {
           query: augmentedQuery,
-          model: config.llm || currentAgent?.model,
+          model: currentAgent?.model || config.llm,
           kb_ids: selectedKbIds,
           web_search: useWebSearch,
           use_deep_think: useDeepThink,
@@ -376,6 +410,7 @@ export default function ChatInterface() {
           setIsTyping(false);
           abortControllerRef.current = null;
         },
+        abortControllerRef.current,
       );
     } catch (error) {
       console.error('채팅 전송 오류:', error);
@@ -563,11 +598,19 @@ export default function ChatInterface() {
                     setIsKbMenuOpen(false);
                     setIsMcpMenuOpen(false);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
+                    currentAgent
+                      ? "bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200"
+                      : "bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200"
+                  }`}
                 >
-                  <AgentIcon agentId={currentAgent?.id} size={12} />
+                  {currentAgent ? (
+                    <AgentIcon agentId={currentAgent.id} size={12} />
+                  ) : (
+                    <Bot size={12} />
+                  )}
                   <span className="max-w-[100px] truncate">
-                    {currentAgent?.name}
+                    {currentAgent?.name || "기본 모드"}
                   </span>
                   <ChevronDown
                     size={10}
@@ -580,6 +623,34 @@ export default function ChatInterface() {
                       에이전트 선택
                     </div>
                     <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
+                      {/* 기본 모드 (에이전트 없음) */}
+                      <button
+                        onClick={() => {
+                          setCurrentAgentId(null);
+                          setIsAgentMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 transition ${
+                          !currentAgent
+                            ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                            : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        }`}
+                      >
+                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+                          !currentAgent
+                            ? "bg-indigo-100 dark:bg-indigo-800 text-indigo-600 dark:text-indigo-300"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                        }`}>
+                          <Bot size={13} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-bold truncate">기본 모드</div>
+                          <div className="text-[10px] text-gray-400 dark:text-gray-500 truncate">에이전트 없이 대화</div>
+                        </div>
+                        {!currentAgent && (
+                          <CheckCircle size={12} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+                        )}
+                      </button>
+                      <div className="h-px bg-gray-100 dark:bg-gray-700 mx-2 my-1" />
                       {agents.map((agent) => (
                         <button
                           key={agent.id}
@@ -930,9 +1001,95 @@ export default function ChatInterface() {
                 >
                   <Brain size={18} />
                 </button>
-                <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 px-1">
-                  {currentAgent?.model || config.llm}
-                </span>
+                {/* 모델 선택 드롭다운 */}
+                <div className="relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsModelMenuOpen(!isModelMenuOpen);
+                      setIsAgentMenuOpen(false);
+                      setIsKbMenuOpen(false);
+                      setIsMcpMenuOpen(false);
+                      setIsDbMenuOpen(false);
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-mono text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300 transition-colors cursor-pointer"
+                    title="모델 변경"
+                  >
+                    <span className="max-w-[140px] truncate">
+                      {currentAgent?.model || config.llm}
+                    </span>
+                    <ChevronDown size={8} className={`transition-transform ${isModelMenuOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {isModelMenuOpen && (
+                    <div className="absolute bottom-full right-0 mb-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 overflow-hidden">
+                      <div className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                        모델 선택
+                        {currentAgent?.model && (
+                          <span className="ml-1 text-[9px] text-amber-500 normal-case">
+                            (에이전트 설정 우선)
+                          </span>
+                        )}
+                      </div>
+                      <div className="max-h-64 overflow-y-auto custom-scrollbar p-1">
+                        {availableModels.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-gray-400">
+                            사용 가능한 모델이 없습니다.
+                          </div>
+                        ) : (
+                          (() => {
+                            const providerLabels = {
+                              ollama: "🏠 로컬 (Ollama)",
+                              openai: "🤖 OpenAI",
+                              anthropic: "🧠 Anthropic",
+                              google: "🔍 Google AI",
+                              groq: "⚡ Groq",
+                            };
+                            const grouped = {};
+                            availableModels.forEach((m) => {
+                              const p = m.provider || "ollama";
+                              if (!grouped[p]) grouped[p] = [];
+                              grouped[p].push(m);
+                            });
+                            return Object.entries(grouped).map(([provider, models]) => (
+                              <div key={provider}>
+                                <div className="px-3 py-1.5 text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                  {providerLabels[provider] || provider}
+                                </div>
+                                {models.map((m) => {
+                                  const activeModel = currentAgent?.model || config.llm;
+                                  const isActive = activeModel === m.name;
+                                  return (
+                                    <button
+                                      key={m.name}
+                                      onClick={() => {
+                                        setConfig({ ...config, llm: m.name });
+                                        setIsModelMenuOpen(false);
+                                      }}
+                                      className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition ${
+                                        isActive
+                                          ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                      }`}
+                                    >
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-xs font-semibold truncate">
+                                          {m.display_name || m.name}
+                                        </div>
+                                      </div>
+                                      {isActive && (
+                                        <CheckCircle size={12} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ));
+                          })()
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               <button
                 onClick={() => handleSend()}

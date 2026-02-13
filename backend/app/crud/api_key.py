@@ -14,14 +14,19 @@ async def get_api_keys_for_user(db: AsyncSession, user_id: int) -> List[ApiKey]:
     return list(result.scalars().all())
 
 
-async def get_api_key_value(db: AsyncSession, user_id: int, provider: str) -> Optional[str]:
-    """사용자의 특정 프로바이더 API 키를 복호화하여 반환합니다."""
+async def get_api_key_for_user(db: AsyncSession, user_id: int, provider: str) -> Optional[ApiKey]:
+    """사용자의 특정 프로바이더 API 키 객체를 반환합니다."""
     result = await db.execute(
         select(ApiKey).where(
             and_(ApiKey.user_id == user_id, ApiKey.provider == provider.lower())
         )
     )
-    key_row = result.scalars().first()
+    return result.scalars().first()
+
+
+async def get_api_key_value(db: AsyncSession, user_id: int, provider: str) -> Optional[str]:
+    """사용자의 특정 프로바이더 API 키를 복호화하여 반환합니다."""
+    key_row = await get_api_key_for_user(db, user_id, provider)
     if key_row:
         return decrypt_value(key_row.encrypted_key)
     return None

@@ -785,7 +785,7 @@ class IngestionService:
                     file_size = 0
 
                 # 웹 경로 변환 (/images/kb_xxx/file.png)
-                storage_dir = Path(self.settings.IMAGE_STORAGE_DIR)
+                storage_dir = self.image_storage_dir
                 relative_image_path = path_obj.relative_to(storage_dir)
                 web_image_path = f"/images/{relative_image_path.as_posix()}"
 

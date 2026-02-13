@@ -4,7 +4,7 @@ import { Settings, Cpu, Globe, Key, Info, Save, Layout, Database, Plug, Plus, Tr
 import { healthAPI, settingsAPI } from '../../api/client';
 
 export default function AdvancedSettings() {
-  const { config, setConfig, apiKeys, addApiKey, deleteApiKey, mcpServers, addMcpServer, deleteMcpServer, reorderMcpServer, moveMcpServer, searchProviders } = useStore();
+  const { config, setConfig, apiKeys, addApiKey, deleteApiKey, mcpServers, addMcpServer, deleteMcpServer, reorderMcpServer, moveMcpServer, searchProviders, agents, updateAgent } = useStore();
   const [activeTab, setActiveTab] = useState('general');
   const [activeModelTab, setActiveModelTab] = useState('llm');
   const [localConfig, setLocalConfig] = useState({ ...config });
@@ -120,6 +120,44 @@ export default function AdvancedSettings() {
       if (keys?.keys) setBackendApiKeys(keys.keys);
     } catch (e) {
       console.error('Failed to delete API key from backend:', e);
+    }
+
+    // 삭제된 프로바이더의 모델을 사용하는 에이전트/설정 리셋
+    const providerLower = provider.toLowerCase();
+    const providerModelPrefixes = {
+      openai: ["gpt-", "o1-", "text-davinci"],
+      anthropic: ["claude"],
+      "google gemini": ["gemini", "palm"],
+      google: ["gemini", "palm"],
+      groq: [],
+    };
+    const prefixes = providerModelPrefixes[providerLower] || [];
+    const isProviderModel = (model) => {
+      if (!model || !prefixes.length) return false;
+      const lower = model.toLowerCase();
+      return prefixes.some((p) => lower.startsWith(p));
+    };
+
+    // Groq 모델은 llama/mixtral 등이지만 Ollama에도 같은 이름이 있을 수 있으므로,
+    // groq 프로바이더 삭제 시에는 groq 특유 suffix로 판별
+    const isGroqModel = (model) => {
+      if (providerLower !== "groq") return false;
+      const lower = (model || "").toLowerCase();
+      return lower.includes("versatile") || lower.includes("instant") || lower.endsWith("32768");
+    };
+
+    const shouldReset = (model) => isProviderModel(model) || isGroqModel(model);
+
+    // 에이전트 모델 리셋
+    agents.forEach((agent) => {
+      if (shouldReset(agent.model)) {
+        updateAgent(agent.id, { model: "" });
+      }
+    });
+
+    // config.llm 리셋
+    if (shouldReset(config.llm)) {
+      setConfig({ ...config, llm: "llama3.1" });
     }
   };
   const handleAddMcp = () => {

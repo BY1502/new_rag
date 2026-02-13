@@ -7,13 +7,14 @@ RAG 서비스
 - Redis 캐싱
 - Reranking (임베딩 기반)
 - MCP 도구 통합
+- 멀티 Provider LLM 지원 (Ollama, OpenAI, Anthropic, Google)
 """
 import json
 import os
 import hashlib
 import logging
 from functools import lru_cache
-from typing import AsyncGenerator, List, Optional
+from typing import AsyncGenerator, List, Optional, Any
 
 import numpy as np
 from langchain_ollama import ChatOllama
@@ -81,6 +82,147 @@ class RAGService:
         await self.cache_service.set(key, context, ttl=settings.CACHE_TTL_SECONDS)
         logger.debug(f"Cached context for query: {query[:50]}...")
 
+    def _detect_provider(self, model_name: str) -> str:
+        """
+        모델명으로 provider 자동 감지
+
+        Returns:
+            "openai" | "anthropic" | "google" | "groq" | "ollama"
+        """
+        model_lower = model_name.lower()
+
+        # OpenAI 모델
+        if any(prefix in model_lower for prefix in ["gpt-", "o1-", "text-davinci", "text-embedding"]):
+            return "openai"
+
+        # Anthropic 모델
+        if "claude" in model_lower:
+            return "anthropic"
+
+        # Google 모델
+        if any(prefix in model_lower for prefix in ["gemini", "palm", "bison"]):
+            return "google"
+
+        # Groq 모델 (Groq 호스팅 오픈소스 모델)
+        if any(prefix in model_lower for prefix in ["llama-", "mixtral-", "llama3"]) and "versatile" in model_lower or "instant" in model_lower or "32768" in model_lower:
+            return "groq"
+
+        # 기본값: Ollama (로컬 모델)
+        return "ollama"
+
+    async def _get_llm_instance(self, model_name: str, user_id: int, db=None) -> Any:
+        """
+        모델명과 사용자 ID를 기반으로 적절한 LLM 인스턴스 생성
+
+        Provider별로:
+        - OpenAI: langchain-openai의 ChatOpenAI
+        - Anthropic: langchain-anthropic의 ChatAnthropic
+        - Google: langchain-google-genai의 ChatGoogleGenerativeAI
+        - Ollama: langchain-ollama의 ChatOllama (기본)
+
+        API 키는 DB에서 동적으로 로드됩니다.
+        """
+        provider = self._detect_provider(model_name)
+        temperature = settings.LLM_TEMPERATURE
+        logger.info(f"[LLM] model={model_name}, provider={provider}, user={user_id}")
+
+        # Ollama (로컬 모델)
+        if provider == "ollama":
+            return ChatOllama(model=model_name, temperature=temperature, timeout=120)
+
+        # 외부 API: DB에서 API 키 조회
+        if db is None:
+            logger.warning(f"[LLM] DB 세션 없음 - {provider} API 키를 가져올 수 없습니다. Ollama로 폴백.")
+            return ChatOllama(model=model_name, temperature=temperature)
+
+        try:
+            from app.crud.api_key import get_api_key_for_user, get_api_keys_for_user
+            from app.core.encryption import decrypt_value
+
+            # provider 이름으로 직접 조회, 없으면 부분 매칭 시도
+            # (프론트엔드에서 'google gemini'로 저장될 수 있음)
+            api_key_row = await get_api_key_for_user(db, user_id, provider)
+            if not api_key_row:
+                # 부분 매칭: 'google' → 'google gemini' 등
+                all_keys = await get_api_keys_for_user(db, user_id)
+                for row in all_keys:
+                    if provider in row.provider or row.provider in provider:
+                        api_key_row = row
+                        break
+
+            if not api_key_row:
+                logger.warning(f"[LLM] {provider} API 키가 등록되지 않았습니다. Ollama로 폴백.")
+                return ChatOllama(model=self.default_model, temperature=temperature, timeout=120)
+
+            # API 키 복호화
+            api_key = decrypt_value(api_key_row.encrypted_key)
+
+            # Provider별 LLM 인스턴스 생성
+            if provider == "openai":
+                try:
+                    from langchain_openai import ChatOpenAI
+                    logger.info(f"[LLM] OpenAI 모델 초기화: {model_name}")
+                    return ChatOpenAI(
+                        model=model_name,
+                        temperature=temperature,
+                        api_key=api_key,
+                        streaming=True,
+                        request_timeout=120
+                    )
+                except ImportError:
+                    logger.error("[LLM] langchain-openai 설치 필요: pip install langchain-openai")
+                    raise
+
+            elif provider == "anthropic":
+                try:
+                    from langchain_anthropic import ChatAnthropic
+                    logger.info(f"[LLM] Anthropic 모델 초기화: {model_name}")
+                    return ChatAnthropic(
+                        model=model_name,
+                        temperature=temperature,
+                        api_key=api_key,
+                        streaming=True,
+                        timeout=120.0
+                    )
+                except ImportError:
+                    logger.error("[LLM] langchain-anthropic 설치 필요: pip install langchain-anthropic")
+                    raise
+
+            elif provider == "google":
+                try:
+                    from langchain_google_genai import ChatGoogleGenerativeAI
+                    logger.info(f"[LLM] Google 모델 초기화: {model_name}")
+                    return ChatGoogleGenerativeAI(
+                        model=model_name,
+                        temperature=temperature,
+                        google_api_key=api_key,
+                        streaming=True,
+                        timeout=120
+                    )
+                except ImportError:
+                    logger.error("[LLM] langchain-google-genai 설치 필요: pip install langchain-google-genai")
+                    raise
+
+            elif provider == "groq":
+                try:
+                    from langchain_openai import ChatOpenAI
+                    logger.info(f"[LLM] Groq 모델 초기화: {model_name}")
+                    return ChatOpenAI(
+                        model=model_name,
+                        temperature=temperature,
+                        api_key=api_key,
+                        base_url="https://api.groq.com/openai/v1",
+                        streaming=True,
+                        request_timeout=120
+                    )
+                except ImportError:
+                    logger.error("[LLM] langchain-openai 설치 필요: pip install langchain-openai")
+                    raise
+
+        except Exception as e:
+            logger.error(f"[LLM] {provider} 초기화 실패: {e}. Ollama로 폴백.")
+            return ChatOllama(model=self.default_model, temperature=temperature, timeout=120)
+
     async def generate_response(
         self,
         message: str,
@@ -125,12 +267,11 @@ class RAGService:
 
             # 1. 모델 결정 (프론트 요청 > 환경변수)
             target_model = model if model else self.default_model
+            logger.info(f"[RAG] model={target_model}, use_sql={use_sql}, db_conn={db_connection_id}, user={user_id}")
 
             # 매 요청마다 모델을 새로 초기화 (다이나믹 모델 스위칭)
-            llm = ChatOllama(
-                model=target_model,
-                temperature=settings.LLM_TEMPERATURE
-            )
+            llm = await self._get_llm_instance(target_model, user_id, db)
+            logger.info(f"[RAG] LLM instance: {type(llm).__name__}")
 
             # 2. MCP 도구 컨텍스트 수집
             tool_context = ""
@@ -144,6 +285,7 @@ class RAGService:
 
             # 3. 질문 의도 분석 (Router)
             route = await self._analyze_intent(message, llm, use_web_search, use_deep_think)
+            logger.info(f"[RAG] route={route}")
 
             # Deep Think 모드일 때 분석 결과 전송
             if use_deep_think:
@@ -162,12 +304,14 @@ class RAGService:
                 # 순환 임포트 방지
                 from app.services.xlam_service import get_xlam_service
                 xlam_service = get_xlam_service()
-                async for chunk in xlam_service.run_pipeline(message, kb_ids[0], user_id, db=db):
+                xlam_llm = await self._get_llm_instance(target_model, user_id, db)
+                async for chunk in xlam_service.run_pipeline(message, kb_ids[0], user_id, db=db, llm_instance=xlam_llm):
                     yield chunk
                 return
 
             # --- [MODE 4] Text-to-SQL ---
             if use_sql and db_connection_id:
+                logger.info(f"[T2SQL] mode activated: conn={db_connection_id}, model={target_model}")
                 yield json.dumps({
                     "type": "thinking",
                     "thinking": "Text-to-SQL 모드로 전환합니다."
@@ -185,8 +329,11 @@ class RAGService:
 
                 uri = _build_connection_uri(conn)
                 t2sql = get_t2sql_service()
-                async for chunk in t2sql.generate_and_execute(message, uri, model=target_model):
+                t2sql_llm = await self._get_llm_instance(target_model, user_id, db)
+                logger.info(f"[T2SQL] LLM={type(t2sql_llm).__name__}, executing...")
+                async for chunk in t2sql.generate_and_execute(message, uri, model=target_model, llm_instance=t2sql_llm):
                     yield chunk
+                logger.info("[T2SQL] completed")
                 return
 
             # 5. 컨텍스트 수집
@@ -294,10 +441,16 @@ class RAGService:
         router_chain = router_prompt | llm | StrOutputParser()
 
         try:
-            route_result = await router_chain.ainvoke({"question": message})
+            import asyncio as _asyncio
+            route_result = await _asyncio.wait_for(
+                router_chain.ainvoke({"question": message}),
+                timeout=30
+            )
             route = route_result.strip().lower()
             if route in ["process", "search", "rag"]:
                 return route
+        except _asyncio.TimeoutError:
+            logger.warning("Router timeout (30s)")
         except Exception as e:
             logger.warning(f"Router failed: {e}")
 
@@ -656,15 +809,24 @@ class RAGService:
             question=question
         )
 
-        # 이미지가 있으면 Ollama Vision API 직접 호출
+        # 이미지가 있으면 Ollama Vision API 직접 호출 (자동으로 Vision 모델로 전환)
         if images:
             import httpx
+
+            # Vision 모델로 자동 전환
+            vision_model = settings.VISION_MODEL
+            current_model = model or self.default_model
+
+            # 현재 모델이 Vision 모델이 아니면 전환
+            if current_model != vision_model:
+                logger.info(f"[Vision] 이미지 감지: {current_model} → {vision_model} 자동 전환")
+
             async with httpx.AsyncClient(timeout=120.0) as client:
                 try:
                     response = await client.post(
                         f"{settings.OLLAMA_BASE_URL}/api/generate",
                         json={
-                            "model": model or self.default_model,
+                            "model": vision_model,  # Vision 모델 사용
                             "prompt": full_prompt,
                             "images": images,
                             "stream": True
@@ -683,7 +845,7 @@ class RAGService:
                                 continue
                 except Exception as e:
                     logger.error(f"Ollama vision API error: {e}")
-                    yield f"[이미지 분석 오류: {str(e)}]"
+                    yield f"[이미지 분석 오류: {str(e)}] Vision 모델({vision_model})이 설치되어 있는지 확인해주세요."
         else:
             # 기존 LangChain 방식 (텍스트 전용)
             template = "\n".join(template_parts)

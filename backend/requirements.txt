@@ -15,6 +15,9 @@ langchain-community
 langchain-qdrant
 langchain-ollama
 langchain-huggingface
+langchain-openai  # ✅ OpenAI API 지원
+langchain-anthropic  # ✅ Anthropic Claude API 지원
+langchain-google-genai  # ✅ Google Gemini API 지원
 sentence-transformers
 langchain-experimental
 pypdf
@@ -28,6 +31,7 @@ bcrypt<4.0.0
 geopy  # ✅ 좌표 변환용
 tabulate # ✅ SQL 결과 출력용
 pymysql # ✅ MySQL T2SQL 지원
+psycopg2-binary # ✅ PostgreSQL T2SQL 지원
 cryptography # ✅ API 키 Fernet 암호화
 mcp # ✅ MCP (Model Context Protocol) 클라이언트
 rank-bm25>=0.2.2 # ✅ BM25 sparse vector 검색

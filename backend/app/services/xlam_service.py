@@ -2,6 +2,7 @@ import json
 import os
 import logging
 from functools import lru_cache
+from typing import Any, Optional
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.agents import create_tool_calling_agent, AgentExecutor
@@ -31,10 +32,11 @@ class XLAMService:
         self.vector_service = get_vector_store_service()
         self.graph_service = get_graph_store_service()
 
-        # xLAM용 고성능 모델 사용 권장 (Tool Calling 지원 모델)
-        self.llm = ChatOllama(
+        # 기본 LLM (Ollama) - 외부 API 사용 시 run_pipeline에서 오버라이드됨
+        self.default_llm = ChatOllama(
             model=settings.LLM_MODEL,
-            temperature=0
+            temperature=0,
+            timeout=120
         )
         self.tools = get_logistics_tools()
         logger.info("XLAMService initialized (singleton)")
@@ -58,10 +60,13 @@ class XLAMService:
             """
         return "\n".join([d.page_content for d in docs])
 
-    async def run_pipeline(self, user_query: str, kb_id: str, user_id: int, db=None):
+    async def run_pipeline(self, user_query: str, kb_id: str, user_id: int, db=None, llm_instance: Any = None):
         """xLAM 실행 파이프라인"""
 
         yield json.dumps({"type": "thinking", "thinking": "xLAM: 관련 매뉴얼(Vector DB)을 참조 중..."}) + "\n"
+
+        # LLM 인스턴스: 외부 API 모델이 전달되면 사용, 아니면 기본 Ollama
+        llm = llm_instance or self.default_llm
 
         # 1. 매뉴얼 검색
         manual_context = await self.retrieve_manual(user_query, kb_id, user_id, db=db)
@@ -82,7 +87,7 @@ class XLAMService:
         ])
 
         # 3. 에이전트 생성
-        agent = create_tool_calling_agent(self.llm, self.tools, prompt)
+        agent = create_tool_calling_agent(llm, self.tools, prompt)
         agent_executor = AgentExecutor(agent=agent, tools=self.tools, verbose=True)
 
         yield json.dumps({"type": "thinking", "thinking": "xLAM: 프로세스 계획 수립 및 실행 시작..."}) + "\n"

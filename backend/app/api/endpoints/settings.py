@@ -235,6 +235,92 @@ async def get_ollama_models(current_user: User = Depends(get_current_user)):
 
 
 # ============================================================
+# 통합 모델 목록 (Ollama + 외부 API)
+# ============================================================
+
+@router.get("/available-models")
+async def get_available_models(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    사용 가능한 모든 모델 목록을 반환합니다.
+    - Ollama 로컬 모델
+    - 등록된 API 키로 사용 가능한 외부 모델 (OpenAI, Anthropic 등)
+    """
+    all_models = []
+
+    # 1. Ollama 로컬 모델
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{settings.OLLAMA_BASE_URL}/api/tags")
+            resp.raise_for_status()
+            data = resp.json()
+
+        for m in data.get("models", []):
+            name = m.get("name", "")
+            param_size = m.get("details", {}).get("parameter_size", "")
+            all_models.append({
+                "name": name,
+                "provider": "ollama",
+                "display_name": f"{name} {f'({param_size})' if param_size else ''}".strip(),
+                "type": "local"
+            })
+    except Exception as e:
+        logger.warning(f"Ollama 모델 로드 실패: {e}")
+
+    # 2. 외부 API 모델 (저장된 API 키 확인)
+    from app.crud.api_key import get_api_keys_for_user
+
+    key_rows = await get_api_keys_for_user(db, current_user.id)
+    available_providers = {row.provider for row in key_rows}
+    logger.info(f"사용자 {current_user.id} 등록된 API 프로바이더: {available_providers}")
+
+    # provider 이름 정규화 (프론트엔드에서 'google gemini' 등으로 저장될 수 있음)
+    def has_provider(name: str) -> bool:
+        return any(name in p for p in available_providers)
+
+    # OpenAI 모델
+    if has_provider("openai"):
+        openai_models = [
+            {"name": "gpt-4o", "display_name": "GPT-4o", "provider": "openai", "type": "api"},
+            {"name": "gpt-4o-mini", "display_name": "GPT-4o Mini", "provider": "openai", "type": "api"},
+            {"name": "gpt-4-turbo", "display_name": "GPT-4 Turbo", "provider": "openai", "type": "api"},
+            {"name": "gpt-3.5-turbo", "display_name": "GPT-3.5 Turbo", "provider": "openai", "type": "api"},
+        ]
+        all_models.extend(openai_models)
+
+    # Anthropic 모델
+    if has_provider("anthropic"):
+        anthropic_models = [
+            {"name": "claude-sonnet-4-5-20250929", "display_name": "Claude 4.5 Sonnet", "provider": "anthropic", "type": "api"},
+            {"name": "claude-opus-4-6", "display_name": "Claude Opus 4.6", "provider": "anthropic", "type": "api"},
+            {"name": "claude-haiku-4-5-20251001", "display_name": "Claude 4.5 Haiku", "provider": "anthropic", "type": "api"},
+        ]
+        all_models.extend(anthropic_models)
+
+    # Google AI 모델 (프론트엔드에서 'google gemini'으로 저장됨)
+    if has_provider("google") or has_provider("gemini"):
+        google_models = [
+            {"name": "gemini-2.0-flash", "display_name": "Gemini 2.0 Flash", "provider": "google", "type": "api"},
+            {"name": "gemini-2.0-pro", "display_name": "Gemini 2.0 Pro", "provider": "google", "type": "api"},
+            {"name": "gemini-1.5-flash", "display_name": "Gemini 1.5 Flash", "provider": "google", "type": "api"},
+        ]
+        all_models.extend(google_models)
+
+    # Groq 모델
+    if has_provider("groq"):
+        groq_models = [
+            {"name": "llama-3.3-70b-versatile", "display_name": "Llama 3.3 70B", "provider": "groq", "type": "api"},
+            {"name": "llama-3.1-8b-instant", "display_name": "Llama 3.1 8B Instant", "provider": "groq", "type": "api"},
+            {"name": "mixtral-8x7b-32768", "display_name": "Mixtral 8x7B", "provider": "groq", "type": "api"},
+        ]
+        all_models.extend(groq_models)
+
+    return {"models": all_models, "total": len(all_models)}
+
+
+# ============================================================
 # DB 연결 관리 (DB 영구 저장)
 # ============================================================
 

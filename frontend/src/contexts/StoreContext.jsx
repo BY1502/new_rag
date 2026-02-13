@@ -205,7 +205,7 @@ export function StoreProvider({ children }) {
     }
     return loadedAgents;
   });
-  const [currentAgentId, setCurrentAgentId] = useState('agent-general');
+  const [currentAgentId, setCurrentAgentId] = useState(null);
 
   const [sessions, setSessions] = useState(() => JSON.parse(localStorage.getItem('rag_ai_sessions')) || [{ id: 'new', title: '새로운 대화', messages: [] }]);
   const [currentSessionId, setCurrentSessionId] = useState('new');
@@ -364,7 +364,7 @@ export function StoreProvider({ children }) {
   const currentFiles = currentKb?.files || [];
 
   const currentAgent = useMemo(() =>
-    agents.find(a => a.id === currentAgentId) || agents[0],
+    currentAgentId ? agents.find(a => a.id === currentAgentId) || null : null,
     [agents, currentAgentId]
   );
 

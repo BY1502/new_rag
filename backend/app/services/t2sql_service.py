@@ -5,13 +5,13 @@ Text-to-SQL 서비스
 - 결과를 tabulate로 포맷팅
 - RAG 스트리밍 형식과 동일한 JSON 라인 출력
 """
+import asyncio
 import json
 import logging
 import re
 from functools import lru_cache
-from typing import AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, Optional
 
-from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_community.utilities import SQLDatabase
@@ -59,6 +59,7 @@ class T2SQLService:
         message: str,
         connection_uri: str,
         model: Optional[str] = None,
+        llm_instance: Any = None,
     ) -> AsyncGenerator[str, None]:
         """
         NL → SQL → Execute → Stream results
@@ -68,8 +69,14 @@ class T2SQLService:
           {"type": "sql", "sql": "..."}
           {"type": "content", "content": "..."}
         """
-        target_model = model or settings.LLM_MODEL
-        llm = ChatOllama(model=target_model, temperature=0)
+        logger.info(f"[T2SQL] start: model={model}, llm={type(llm_instance).__name__ if llm_instance else None}")
+
+        if llm_instance is not None:
+            llm = llm_instance
+        else:
+            from langchain_ollama import ChatOllama
+            target_model = model or settings.LLM_MODEL
+            llm = ChatOllama(model=target_model, temperature=0, timeout=120)
 
         # Step 1: DB 연결 & 스키마 추출
         yield json.dumps({
@@ -78,9 +85,25 @@ class T2SQLService:
         }) + "\n"
 
         try:
-            db = SQLDatabase.from_uri(connection_uri)
-            schema_info = db.get_table_info()
+            loop = asyncio.get_event_loop()
+            db = await asyncio.wait_for(
+                loop.run_in_executor(None, SQLDatabase.from_uri, connection_uri),
+                timeout=15
+            )
+            schema_info = await asyncio.wait_for(
+                loop.run_in_executor(None, db.get_table_info),
+                timeout=15
+            )
+            logger.info(f"[T2SQL] schema loaded: {len(schema_info)} chars")
+        except asyncio.TimeoutError:
+            logger.error("[T2SQL] DB connection timeout (15s)")
+            yield json.dumps({
+                "type": "content",
+                "content": "데이터베이스 연결 타임아웃 (15초). DB 서버 상태를 확인하세요."
+            }) + "\n"
+            return
         except Exception as e:
+            logger.error(f"[T2SQL] DB connection failed: {e}")
             yield json.dumps({
                 "type": "content",
                 "content": f"데이터베이스 연결 실패: {e}"
@@ -104,12 +127,24 @@ class T2SQLService:
         chain = sql_prompt | llm | StrOutputParser()
 
         try:
-            raw_sql = await chain.ainvoke({
-                "schema": schema_info,
-                "question": message
-            })
+            raw_sql = await asyncio.wait_for(
+                chain.ainvoke({
+                    "schema": schema_info,
+                    "question": message
+                }),
+                timeout=90
+            )
             sql = re.sub(r'```sql?\s*', '', raw_sql).strip().rstrip('`').strip()
+            logger.info(f"[T2SQL] SQL generated: {sql[:100]}")
+        except asyncio.TimeoutError:
+            logger.error("[T2SQL] LLM timeout (90s)")
+            yield json.dumps({
+                "type": "content",
+                "content": "SQL 생성 타임아웃 (90초). 모델 상태를 확인하세요."
+            }) + "\n"
+            return
         except Exception as e:
+            logger.error(f"[T2SQL] SQL generation failed: {type(e).__name__}: {e}")
             yield json.dumps({
                 "type": "content",
                 "content": f"SQL 생성 실패: {e}"
@@ -134,13 +169,23 @@ class T2SQLService:
         # Step 4: 실행 & 결과 포맷팅
         try:
             from sqlalchemy import create_engine, text
-            engine = create_engine(connection_uri)
-            with engine.connect() as conn:
-                rs = conn.execute(text(sql))
-                columns = list(rs.keys())
-                rows = [list(row) for row in rs.fetchmany(100)]
-                total = len(rows)
-            engine.dispose()
+
+            def _execute_sql():
+                engine = create_engine(connection_uri, connect_args={"connect_timeout": 10})
+                try:
+                    with engine.connect() as conn:
+                        rs = conn.execute(text(sql))
+                        columns = list(rs.keys())
+                        rows = [list(row) for row in rs.fetchmany(100)]
+                    return columns, rows
+                finally:
+                    engine.dispose()
+
+            columns, rows = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(None, _execute_sql),
+                timeout=30
+            )
+            total = len(rows)
 
             if rows:
                 table_str = tabulate(rows, headers=columns, tablefmt="pipe")
@@ -157,7 +202,14 @@ class T2SQLService:
                     "content": f"**실행된 SQL:**\n```sql\n{sql}\n```\n\n결과가 없습니다."
                 }) + "\n"
 
+        except asyncio.TimeoutError:
+            logger.error("[T2SQL] SQL execution timeout (30s)")
+            yield json.dumps({
+                "type": "content",
+                "content": f"SQL 실행 타임아웃 (30초).\n\n**생성된 SQL:**\n```sql\n{sql}\n```"
+            }) + "\n"
         except Exception as e:
+            logger.error(f"[T2SQL] SQL execution error: {e}")
             yield json.dumps({
                 "type": "content",
                 "content": f"SQL 실행 오류: {e}\n\n**생성된 SQL:**\n```sql\n{sql}\n```"

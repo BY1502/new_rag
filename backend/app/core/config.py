@@ -145,6 +145,10 @@ class Settings(BaseSettings):
         default="llama3.1",
         description="기본 LLM 모델명"
     )
+    VISION_MODEL: str = Field(
+        default="llava",
+        description="멀티모달 Vision LLM 모델명 (이미지 분석용)"
+    )
     LLM_TEMPERATURE: float = Field(default=0.0, ge=0.0, le=2.0)
     LLM_MAX_TOKENS: int = Field(default=4096, ge=256, le=32768)
 

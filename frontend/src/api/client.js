@@ -770,6 +770,27 @@ export const settingsAPI = {
     }
   },
 
+  getAvailableModels: async () => {
+    try {
+      const response = await fetchWithTimeout(
+        `${API_BASE_URL}/settings/available-models`,
+        {
+          method: "GET",
+          headers: { ...getAuthHeader() },
+        },
+      );
+
+      if (!response.ok) {
+        return { models: [], error: "Failed to fetch models" };
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to fetch available models:", error);
+      return { models: [], error: error.message };
+    }
+  },
+
   // DB Connections (T2SQL)
   getDbConnections: async () => {
     try {

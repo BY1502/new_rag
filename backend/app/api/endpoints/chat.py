@@ -33,6 +33,11 @@ async def chat_stream(
     """
     스트리밍 채팅 엔드포인트
     """
+    logger.info(
+        f"[CHAT] model={request.model}, use_sql={request.use_sql}, "
+        f"db_connection_id={request.db_connection_id}, user={current_user.id}"
+    )
+
     service = get_rag_service()
 
     # 대화 히스토리를 dict 리스트로 변환
