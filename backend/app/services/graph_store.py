@@ -18,9 +18,11 @@ class GraphStoreService:
     def __init__(self):
         if GraphStoreService._initialized:
             return
-        GraphStoreService._initialized = True
+
         self.graph = None
         self._connect()
+
+        GraphStoreService._initialized = True
 
     def _connect(self):
         """Neo4j 연결을 시도합니다."""
@@ -132,7 +134,7 @@ class GraphStoreService:
             logger.error(f"Neo4j Query Error: {e}")
             return []
 
-    def log_process_execution(self, session_id: str, step_name: str, status: str, details: str, prev_step: str = None):
+    def log_process_execution(self, session_id: str, step_name: str, status: str, details: str):
         """xLAM 프로세스 실행 로그 저장"""
         self.ensure_connection()
         if not self.graph:

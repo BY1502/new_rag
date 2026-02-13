@@ -99,7 +99,7 @@ class MCPToolWrapper(BaseTool):
     def _run(self, query: str, **kwargs) -> str:
         """동기 실행 (폴백)"""
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             if loop.is_running():
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as pool:

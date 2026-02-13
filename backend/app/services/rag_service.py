@@ -45,15 +45,32 @@ class RAGService:
     def __init__(self):
         if RAGService._initialized:
             return
-        RAGService._initialized = True
 
-        os.environ["OLLAMA_HOST"] = settings.OLLAMA_BASE_URL
-        self.vector_service = get_vector_store_service()
-        self.cache_service = get_cache_service()
-        self.web_search_tool = DuckDuckGoSearchRun()
-        self.default_model = settings.LLM_MODEL
-        self.default_top_k = settings.RAG_TOP_K
-        logger.info("RAGService initialized (singleton)")
+        try:
+            os.environ["OLLAMA_HOST"] = settings.OLLAMA_BASE_URL
+            self.vector_service = get_vector_store_service()
+            self.cache_service = get_cache_service()
+            try:
+                self.web_search_tool = DuckDuckGoSearchRun()
+            except Exception as e:
+                logger.warning(f"DuckDuckGoSearchRun 초기화 실패 (무시): {e}")
+                self.web_search_tool = None
+            self.default_model = settings.LLM_MODEL
+            self.default_top_k = settings.RAG_TOP_K
+            RAGService._initialized = True
+            logger.info("RAGService initialized (singleton)")
+        except Exception as e:
+            logger.error(f"RAGService 초기화 실패: {e}", exc_info=True)
+            # 최소한의 기본값 설정하여 부분 동작 보장
+            self.default_model = getattr(settings, 'LLM_MODEL', 'gemma3:27b')
+            self.default_top_k = getattr(settings, 'RAG_TOP_K', 5)
+            self.web_search_tool = None
+            if not hasattr(self, 'vector_service'):
+                self.vector_service = None
+            if not hasattr(self, 'cache_service'):
+                self.cache_service = None
+            RAGService._initialized = True
+            logger.warning("RAGService 부분 초기화됨 (일부 기능 제한)")
 
     def _get_cache_key(self, query: str, kb_ids: List[str], user_id: int) -> str:
         """캐시 키 생성 (kb_ids 정렬하여 일관성 보장)"""
@@ -466,6 +483,9 @@ class RAGService:
             return await self._api_search(query, "tavily", user_id)
 
         # 기본: DuckDuckGo (API 키 불필요)
+        if not self.web_search_tool:
+            logger.warning("DuckDuckGo search tool not available")
+            return ""
         try:
             result = self.web_search_tool.invoke(query)
             return f"[Web Search Result - DuckDuckGo]\n{result}"

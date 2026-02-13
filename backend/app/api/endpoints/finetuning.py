@@ -113,6 +113,8 @@ async def run_finetuning_job(
             job.error_message = str(e)
             await db.commit()
 
+    await engine.dispose()
+
 
 @router.post("/jobs", response_model=FineTuningJobResponse)
 async def create_finetuning_job(

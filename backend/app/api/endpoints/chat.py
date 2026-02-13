@@ -34,7 +34,7 @@ async def chat_stream(
     스트리밍 채팅 엔드포인트
     """
     logger.info(
-        f"[CHAT] model={request.model}, use_sql={request.use_sql}, "
+        f"[CHAT-REQ] model={request.model}, use_sql={request.use_sql}, "
         f"db_connection_id={request.db_connection_id}, user={current_user.id}"
     )
 
@@ -101,7 +101,7 @@ async def extract_text_from_file(
             # Docling 시도
             if ingestion.converter:
                 try:
-                    loop = asyncio.get_event_loop()
+                    loop = asyncio.get_running_loop()
                     result = await loop.run_in_executor(
                         None, ingestion.converter.convert, file_path
                     )
@@ -114,7 +114,7 @@ async def extract_text_from_file(
                 try:
                     from langchain_community.document_loaders import PyPDFLoader
                     loader = PyPDFLoader(file_path)
-                    loop = asyncio.get_event_loop()
+                    loop = asyncio.get_running_loop()
                     docs = await loop.run_in_executor(None, loader.load)
                     text = ingestion.clean_markdown(
                         "\n\n".join(d.page_content for d in docs)

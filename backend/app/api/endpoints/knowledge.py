@@ -856,7 +856,7 @@ async def search_by_image(
         )
 
         import asyncio
-        results = await asyncio.get_event_loop().run_in_executor(
+        results = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: asyncio.run(store.multimodal_search(
                 query_vector=query_vector,

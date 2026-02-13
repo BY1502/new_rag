@@ -58,45 +58,50 @@ class IngestionService:
     def __init__(self):
         if IngestionService._initialized:
             return
-        IngestionService._initialized = True
 
-        self.vector_service = get_vector_store_service()
-        self.graph_service = get_graph_store_service()
+        try:
+            self.vector_service = get_vector_store_service()
+            self.graph_service = get_graph_store_service()
 
-        # 크로스 플랫폼 임시 디렉토리 사용
-        self.upload_dir = Path(tempfile.gettempdir()) / "rag_uploads"
-        self.upload_dir.mkdir(parents=True, exist_ok=True)
+            # 크로스 플랫폼 임시 디렉토리 사용
+            self.upload_dir = Path(tempfile.gettempdir()) / "rag_uploads"
+            self.upload_dir.mkdir(parents=True, exist_ok=True)
 
-        # 이미지 저장 디렉토리
-        self.image_storage_dir = Path(settings.IMAGE_STORAGE_DIR)
-        self.image_storage_dir.mkdir(parents=True, exist_ok=True)
+            # 이미지 저장 디렉토리
+            self.image_storage_dir = Path(settings.IMAGE_STORAGE_DIR)
+            self.image_storage_dir.mkdir(parents=True, exist_ok=True)
 
-        # Ollama 환경 설정
-        os.environ["OLLAMA_HOST"] = settings.OLLAMA_BASE_URL
+            # Ollama 환경 설정
+            os.environ["OLLAMA_HOST"] = settings.OLLAMA_BASE_URL
 
-        # Docling 초기화 (지연 로딩)
-        self._converter = None
+            # Docling 초기화 (지연 로딩)
+            self._converter = None
 
-        # 디바이스 설정
-        self._device = self._get_device()
+            # 디바이스 설정
+            self._device = self._get_device()
 
-        # 임베딩 모델 (지연 로딩)
-        self._embeddings = None
+            # 임베딩 모델 (지연 로딩)
+            self._embeddings = None
 
-        # CLIP 임베딩 (지연 로딩)
-        self._clip_embeddings = None
+            # CLIP 임베딩 (지연 로딩)
+            self._clip_embeddings = None
 
-        # 이미지 캡셔닝 (지연 로딩)
-        self._image_captioning = None
+            # 이미지 캡셔닝 (지연 로딩)
+            self._image_captioning = None
 
-        # 이미지 OCR (지연 로딩)
-        self._image_ocr = None
+            # 이미지 OCR (지연 로딩)
+            self._image_ocr = None
 
-        # LLM (지연 로딩)
-        self._llm = None
-        self._llm_transformer = None
+            # LLM (지연 로딩)
+            self._llm = None
+            self._llm_transformer = None
 
-        logger.info(f"[수집] 초기화 완료 - 디바이스: {self._device}, 이미지 저장: {self.image_storage_dir}")
+            IngestionService._initialized = True
+            logger.info(f"[수집] 초기화 완료 - 디바이스: {self._device}, 이미지 저장: {self.image_storage_dir}")
+        except Exception as e:
+            logger.error(f"[수집] 초기화 실패: {e}", exc_info=True)
+            IngestionService._initialized = False
+            raise
 
     @staticmethod
     def _get_device() -> str:
@@ -506,7 +511,7 @@ class IngestionService:
         if self.converter:
             try:
                 logger.info("[수집] Docling으로 파싱 중...")
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 conversion_result = await loop.run_in_executor(
                     None, self.converter.convert, file_path
                 )
@@ -536,7 +541,7 @@ class IngestionService:
         try:
             logger.info("[수집] PyPDF로 폴백 파싱 중...")
             loader = PyPDFLoader(file_path)
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             raw_docs = await loop.run_in_executor(None, loader.load)
 
             full_text = self.clean_markdown("\n\n".join([d.page_content for d in raw_docs]))
@@ -643,7 +648,7 @@ class IngestionService:
             logger.info(f"[수집] CLIP 텍스트 임베딩 생성 중: {len(texts)}개 청크...")
 
             # CLIP 텍스트 임베딩 생성 (배치)
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             clip_vectors = await loop.run_in_executor(
                 None,
                 self.clip_embeddings.embed_texts_for_cross_modal,
@@ -704,7 +709,7 @@ class IngestionService:
             logger.info(f"[수집] 이미지 인덱싱 시작: {len(image_paths)}개 (CLIP + 캡셔닝 + OCR)...")
 
             # CLIP 이미지 임베딩 생성 (배치)
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             clip_vectors = await loop.run_in_executor(
                 None,
                 self.clip_embeddings.embed_images,
@@ -844,7 +849,7 @@ class IngestionService:
         try:
             logger.info(f"[수집] 그래프 변환 시작: {len(splits)}개 청크...")
             # CPU-bound 작업을 스레드풀에서 실행
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             graph_docs = await loop.run_in_executor(
                 None,
                 self.llm_transformer.convert_to_graph_documents,

@@ -26,20 +26,26 @@ class XLAMService:
     def __init__(self):
         if XLAMService._initialized:
             return
-        XLAMService._initialized = True
 
-        os.environ["OLLAMA_HOST"] = settings.OLLAMA_BASE_URL
-        self.vector_service = get_vector_store_service()
-        self.graph_service = get_graph_store_service()
+        try:
+            os.environ["OLLAMA_HOST"] = settings.OLLAMA_BASE_URL
+            self.vector_service = get_vector_store_service()
+            self.graph_service = get_graph_store_service()
 
-        # 기본 LLM (Ollama) - 외부 API 사용 시 run_pipeline에서 오버라이드됨
-        self.default_llm = ChatOllama(
-            model=settings.LLM_MODEL,
-            temperature=0,
-            timeout=120
-        )
-        self.tools = get_logistics_tools()
-        logger.info("XLAMService initialized (singleton)")
+            # 기본 LLM (Ollama) - 외부 API 사용 시 run_pipeline에서 오버라이드됨
+            self.default_llm = ChatOllama(
+                model=settings.LLM_MODEL,
+                temperature=0,
+                timeout=120
+            )
+            self.tools = get_logistics_tools()
+
+            XLAMService._initialized = True
+            logger.info("XLAMService initialized (singleton)")
+        except Exception as e:
+            logger.error(f"XLAMService 초기화 실패: {e}", exc_info=True)
+            XLAMService._initialized = False
+            raise
 
     async def retrieve_manual(self, query: str, kb_id: str, user_id: int, db=None):
         """Vector DB에서 매뉴얼 검색"""

@@ -219,9 +219,12 @@ export function StoreProvider({ children }) {
     }
     if (settingsSyncedRef.current) return;
 
+    let mounted = true;
+
     (async () => {
       // 설정 로드
       const backendSettings = await settingsAPI.getUserSettings();
+      if (!mounted) return;
       if (backendSettings) {
         const backendConfig = backendToFrontend(backendSettings);
         const isDefault = backendConfig.llm === CONFIG_DEFAULTS.llm
@@ -235,6 +238,7 @@ export function StoreProvider({ children }) {
             const localConfig = JSON.parse(localSaved);
             const merged = { ...CONFIG_DEFAULTS, ...localConfig };
             await settingsAPI.updateUserSettings(frontendToBackend(merged));
+            if (!mounted) return;
             skipNextBackendSync.current = true;
             setConfig(merged);
           } catch { /* 마이그레이션 실패 시 무시 */ }
@@ -246,6 +250,7 @@ export function StoreProvider({ children }) {
 
       // KB 목록 로드
       const kbResult = await knowledgeAPI.listBases();
+      if (!mounted) return;
       if (kbResult.bases && kbResult.bases.length > 0) {
         const mapped = kbResult.bases.map(b => ({
           id: b.kb_id,
@@ -266,6 +271,7 @@ export function StoreProvider({ children }) {
 
       // 에이전트 목록 로드
       const agentResult = await agentsAPI.list();
+      if (!mounted) return;
       if (agentResult.agents && agentResult.agents.length > 0) {
         const mapped = agentResult.agents.map(a => ({
           id: a.agent_id,
@@ -283,6 +289,7 @@ export function StoreProvider({ children }) {
 
       // 세션 목록 로드
       const sessionResult = await sessionsAPI.list();
+      if (!mounted) return;
       if (sessionResult.sessions && sessionResult.sessions.length > 0) {
         const mapped = sessionResult.sessions.map(s => ({
           id: s.session_id,
@@ -298,6 +305,7 @@ export function StoreProvider({ children }) {
       // MCP 서버 목록 로드
       try {
         const mcpResult = await mcpAPI.list();
+        if (!mounted) return;
         if (mcpResult.servers && mcpResult.servers.length > 0) {
           const mapped = mcpResult.servers.map(s => ({
             id: s.server_id,
@@ -313,8 +321,10 @@ export function StoreProvider({ children }) {
         }
       } catch { /* MCP 로드 실패 시 localStorage 폴백 유지 */ }
 
-      settingsSyncedRef.current = true;
+      if (mounted) settingsSyncedRef.current = true;
     })();
+
+    return () => { mounted = false; };
   }, [isAuthenticated]);
 
   // 디바운스된 localStorage + 백엔드 저장

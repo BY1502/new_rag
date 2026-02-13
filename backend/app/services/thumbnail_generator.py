@@ -16,11 +16,18 @@ class ThumbnailGenerator:
     """썸네일 생성 서비스 (싱글톤)"""
 
     _instance: Optional["ThumbnailGenerator"] = None
+    _initialized: bool = False
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
+
+    def __init__(self):
+        if ThumbnailGenerator._initialized:
+            return
+        ThumbnailGenerator._initialized = True
+        logger.info("[썸네일] ThumbnailGenerator 초기화 완료")
 
     def generate_thumbnail(
         self,

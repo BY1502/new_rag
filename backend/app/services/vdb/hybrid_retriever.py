@@ -73,6 +73,6 @@ class HybridRetriever(BaseRetriever):
         run_manager: Optional[CallbackManagerForRetrieverRun] = None,
     ) -> List[Document]:
         """동기 fallback"""
-        return asyncio.get_event_loop().run_until_complete(
+        return asyncio.get_running_loop().run_until_complete(
             self._aget_relevant_documents(query)
         )

@@ -4,6 +4,7 @@ Qdrant Client Resolver
 - TTL 캐시로 외부 QdrantClient 인스턴스 관리
 - 연결 실패 시 None 반환 (로컬 Qdrant fallback)
 """
+import asyncio
 import time
 import logging
 from typing import Optional, Tuple
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 # Cache: (user_id, service_id) -> (QdrantClient, created_timestamp)
 _client_cache: dict[Tuple[int, str], Tuple[QdrantClient, float]] = {}
 _CACHE_TTL_SECONDS = 300  # 5분
+_resolve_lock = asyncio.Lock()
 
 
 def _get_cached_client(user_id: int, service_id: str) -> Optional[QdrantClient]:
@@ -44,6 +46,15 @@ async def resolve_qdrant_client(
     KB에 연결된 외부 Qdrant 서비스가 있으면 해당 QdrantClient를 반환합니다.
     없거나 연결 실패 시 None을 반환합니다 (로컬 Qdrant 사용).
     """
+    async with _resolve_lock:
+        return await _resolve_qdrant_client_inner(db, user_id, kb_id)
+
+
+async def _resolve_qdrant_client_inner(
+    db: AsyncSession,
+    user_id: int,
+    kb_id: str
+) -> Optional[QdrantClient]:
     kb = await get_knowledge_base(db, user_id, kb_id)
     if not kb or not kb.external_service_id:
         return None

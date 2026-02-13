@@ -85,7 +85,7 @@ class T2SQLService:
         }) + "\n"
 
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             db = await asyncio.wait_for(
                 loop.run_in_executor(None, SQLDatabase.from_uri, connection_uri),
                 timeout=15
@@ -182,7 +182,7 @@ class T2SQLService:
                     engine.dispose()
 
             columns, rows = await asyncio.wait_for(
-                asyncio.get_event_loop().run_in_executor(None, _execute_sql),
+                asyncio.get_running_loop().run_in_executor(None, _execute_sql),
                 timeout=30
             )
             total = len(rows)

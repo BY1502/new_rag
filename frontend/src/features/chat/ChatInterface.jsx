@@ -158,6 +158,16 @@ export default function ChatInterface() {
     setIsExtractingFiles(false);
   }, [currentSessionId]);
 
+  // 컴포넌트 unmount 시 스트리밍 중단
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
@@ -194,6 +204,15 @@ export default function ChatInterface() {
   const handleSend = async (retryQuery = null) => {
     const query = retryQuery || input;
     if (!query.trim() && files.length === 0) return;
+
+    // SQL 모드 검증: DB 미선택 시 전송 차단
+    if (useSql && !selectedDbConnectionId) {
+      addMessage({
+        role: "assistant",
+        text: "SQL 모드가 활성화되어 있지만 데이터베이스가 선택되지 않았습니다. 먼저 DB를 선택해주세요.",
+      });
+      return;
+    }
 
     if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
@@ -258,7 +277,7 @@ export default function ChatInterface() {
           .filter(r => r.type === 'image' && r.data)
           .map(r => r.data);
 
-        console.log(`파일 처리 완료: 텍스트 ${fileTexts.length}개, 이미지 ${imageBase64List.length}개`);
+        // 파일 처리 완료
       } catch (error) {
         console.error('파일 처리 중 오류:', error);
       } finally {
@@ -268,7 +287,7 @@ export default function ChatInterface() {
 
     // 이미지 검증 (최대 5개, 경고만 표시)
     if (imageBase64List.length > 5) {
-      console.warn(`이미지가 ${imageBase64List.length}개입니다. 처리 시간이 길어질 수 있습니다.`);
+      // 이미지 5개 초과 시 처리 시간 길어질 수 있음
     }
 
     // 파일 텍스트를 쿼리에 병합
@@ -330,25 +349,26 @@ export default function ChatInterface() {
         .slice(-10)
         .map((m) => ({ role: m.role, content: m.text }));
 
+      const chatParams = {
+        query: augmentedQuery,
+        model: currentAgent?.model || config.llm,
+        kb_ids: selectedKbIds,
+        web_search: useWebSearch,
+        use_deep_think: useDeepThink,
+        active_mcp_ids: activeMcpIds,
+        system_prompt: currentAgent?.systemPrompt || null,
+        history: recentHistory,
+        top_k: config.searchTopK || null,
+        use_rerank: config.useRerank || false,
+        search_provider: config.activeSearchProviderId || null,
+        search_mode: config.searchMode || 'hybrid',
+        use_multimodal_search: config.useMultimodalSearch || false,
+        images: imageBase64List,
+        use_sql: useSql,
+        db_connection_id: selectedDbConnectionId,
+      };
       await streamChat(
-        {
-          query: augmentedQuery,
-          model: currentAgent?.model || config.llm,
-          kb_ids: selectedKbIds,
-          web_search: useWebSearch,
-          use_deep_think: useDeepThink,
-          active_mcp_ids: activeMcpIds,
-          system_prompt: currentAgent?.systemPrompt || null,
-          history: recentHistory,
-          top_k: config.searchTopK || null,
-          use_rerank: config.useRerank || false,
-          search_provider: config.activeSearchProviderId || null,
-          search_mode: config.searchMode || 'hybrid',
-          use_multimodal_search: config.useMultimodalSearch || false,
-          images: imageBase64List,
-          use_sql: useSql,
-          db_connection_id: selectedDbConnectionId,
-        },
+        chatParams,
         (chunk) => {
           if (abortControllerRef.current?.signal.aborted) return;
 
@@ -472,7 +492,11 @@ export default function ChatInterface() {
         ...updatedMessages[msgIndex],
         feedback: { is_positive: isPositive },
       };
-      updateSessionMessages(currentSessionId, updatedMessages);
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === currentSessionId ? { ...s, messages: updatedMessages } : s,
+        ),
+      );
     } catch (error) {
       console.error("피드백 저장 실패:", error);
     }

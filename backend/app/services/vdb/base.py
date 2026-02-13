@@ -89,6 +89,6 @@ class VectorStoreRetrieverAdapter(BaseRetriever):
         run_manager: Optional[CallbackManagerForRetrieverRun] = None,
     ) -> List[Document]:
         """동기 검색 (fallback)"""
-        return asyncio.get_event_loop().run_until_complete(
+        return asyncio.get_running_loop().run_until_complete(
             self._aget_relevant_documents(query, run_manager=run_manager)
         )
