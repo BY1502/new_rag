@@ -1,0 +1,152 @@
+# ============================================================
+# RAG AI System - Production Docker Compose
+# ============================================================
+# 사용법:
+#   docker compose -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml logs -f
+# ============================================================
+
+services:
+  # ──────────────────────────────────────────────
+  # 1. PostgreSQL (관계형 데이터베이스)
+  # ──────────────────────────────────────────────
+  postgres:
+    image: postgres:15
+    container_name: rag_postgres
+    environment:
+      POSTGRES_USER: rag_user
+      POSTGRES_PASSWORD: rag_password
+      POSTGRES_DB: rag_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - rag_network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag_user -d rag_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────────────
+  # 2. Qdrant (벡터 데이터베이스)
+  # ──────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: rag_qdrant
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - rag_network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────────────
+  # 3. Redis (캐시 및 세션)
+  # ──────────────────────────────────────────────
+  redis:
+    image: redis:alpine
+    container_name: rag_redis
+    networks:
+      - rag_network
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────────────
+  # 4. Neo4j (지식 그래프)
+  # ──────────────────────────────────────────────
+  neo4j:
+    image: neo4j:latest
+    container_name: rag_neo4j
+    environment:
+      NEO4J_AUTH: neo4j/password
+      NEO4J_PLUGINS: '["apoc"]'
+    volumes:
+      - neo4j_data:/data
+    networks:
+      - rag_network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p password 'RETURN 1' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ──────────────────────────────────────────────
+  # 5. Backend (FastAPI)
+  # ──────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rag_backend
+    env_file:
+      - ./backend/.env.production
+    volumes:
+      - image_storage:/app/storage/images
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - rag_network
+    restart: always
+
+  # ──────────────────────────────────────────────
+  # 6. Frontend (React + Nginx)
+  # ──────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rag_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - rag_network
+    restart: always
+
+  # ──────────────────────────────────────────────
+  # 7. Portainer (Docker 관리 GUI) - 선택사항
+  # ──────────────────────────────────────────────
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: rag_portainer
+    ports:
+      - "9090:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - rag_network
+    restart: always
+
+networks:
+  rag_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  neo4j_data:
+  image_storage:
+  portainer_data:

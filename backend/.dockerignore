@@ -1,0 +1,17 @@
+__pycache__
+*.pyc
+*.pyo
+.env
+.env.production
+.git
+.gitignore
+*.md
+.vscode
+.idea
+tests/
+*.egg-info
+dist/
+build/
+docker-compose*.yml
+Dockerfile
+.dockerignore
