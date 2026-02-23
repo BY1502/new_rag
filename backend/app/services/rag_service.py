@@ -359,10 +359,23 @@ class RAGService:
             # --- [MODE 2] Web Search ---
             if route == "search":
                 provider = search_provider or "ddg"
+                provider_labels = {"ddg": "DuckDuckGo", "serper": "Google Serper", "brave": "Brave Search", "tavily": "Tavily"}
+                provider_label = provider_labels.get(provider, provider)
+
+                yield json.dumps({
+                    "type": "thinking",
+                    "thinking": f"{provider_label} 웹 검색 중..."
+                }) + "\n"
+
                 context_text = await self._web_search(message, provider, user_id)
-                if use_deep_think and context_text:
-                    provider_labels = {"ddg": "DuckDuckGo", "serper": "Google Serper", "brave": "Brave Search", "tavily": "Tavily"}
-                    provider_label = provider_labels.get(provider, provider)
+
+                if context_text.startswith("[Web Search Failed]"):
+                    # 검색 실패 시 사용자에게 알림
+                    yield json.dumps({
+                        "type": "thinking",
+                        "thinking": f"웹 검색 실패: {context_text.replace('[Web Search Failed] ', '')}"
+                    }) + "\n"
+                elif context_text:
                     yield json.dumps({
                         "type": "thinking",
                         "thinking": f"{provider_label} 웹 검색 결과를 기반으로 답변 생성 중..."
@@ -475,6 +488,8 @@ class RAGService:
 
     async def _web_search(self, query: str, provider: str = "ddg", user_id: int = 0) -> str:
         """웹 검색 수행 (DuckDuckGo / Serper / Brave / Tavily)"""
+        import asyncio as _asyncio
+
         if provider == "serper":
             return await self._api_search(query, "serper", user_id)
         elif provider == "brave":
@@ -485,25 +500,46 @@ class RAGService:
         # 기본: DuckDuckGo (API 키 불필요)
         if not self.web_search_tool:
             logger.warning("DuckDuckGo search tool not available")
-            return ""
+            return "[Web Search Failed] DuckDuckGo 검색 도구를 사용할 수 없습니다."
         try:
-            result = self.web_search_tool.invoke(query)
+            # DuckDuckGoSearchRun.invoke()는 동기 함수이므로 run_in_executor로 비동기 실행
+            loop = _asyncio.get_running_loop()
+            result = await _asyncio.wait_for(
+                loop.run_in_executor(None, self.web_search_tool.invoke, query),
+                timeout=15
+            )
+            if not result or not result.strip():
+                logger.warning("DuckDuckGo returned empty result")
+                return "[Web Search Failed] DuckDuckGo 검색 결과가 없습니다."
             return f"[Web Search Result - DuckDuckGo]\n{result}"
+        except _asyncio.TimeoutError:
+            logger.warning("DuckDuckGo search timed out (15s)")
+            return "[Web Search Failed] DuckDuckGo 검색 시간이 초과되었습니다."
         except Exception as e:
             logger.warning(f"DuckDuckGo search failed: {e}")
-            return ""
+            return f"[Web Search Failed] DuckDuckGo 검색 실패: {str(e)}"
 
     async def _api_search(self, query: str, provider: str, user_id: int = 0) -> str:
         """API 키 기반 웹 검색 (Serper / Brave / Tavily)"""
+        import asyncio as _asyncio
+
         from app.api.endpoints.settings import get_api_key_for_user
         api_key = await get_api_key_for_user(user_id, provider) if user_id else None
         if not api_key:
             logger.warning(f"{provider} API key not found, falling back to DuckDuckGo")
-            try:
-                result = self.web_search_tool.invoke(query)
-                return f"[Web Search Result - DuckDuckGo ({provider} 키 없음)]\n{result}"
-            except Exception:
-                return ""
+            # DuckDuckGo 폴백 (동기 → run_in_executor)
+            if self.web_search_tool:
+                try:
+                    loop = _asyncio.get_running_loop()
+                    result = await _asyncio.wait_for(
+                        loop.run_in_executor(None, self.web_search_tool.invoke, query),
+                        timeout=15
+                    )
+                    if result and result.strip():
+                        return f"[Web Search Result - DuckDuckGo ({provider} 키 없음)]\n{result}"
+                except Exception as e:
+                    logger.warning(f"DuckDuckGo fallback failed: {e}")
+            return f"[Web Search Failed] {provider} API 키가 설정되지 않았습니다. 설정에서 API 키를 추가해주세요."
 
         try:
             import httpx
@@ -550,11 +586,11 @@ class RAGService:
                             return "[Web Search Result - Tavily]\n" + "\n".join(results)
 
                 logger.warning(f"{provider} API error: {resp.status_code}")
-                return ""
+                return f"[Web Search Failed] {provider} API 오류 (HTTP {resp.status_code})"
 
         except Exception as e:
             logger.warning(f"{provider} search failed: {e}")
-            return ""
+            return f"[Web Search Failed] {provider} 검색 실패: {str(e)}"
 
     async def _retrieve_context(
         self,
@@ -796,6 +832,17 @@ class RAGService:
             lines.append(f"{role}: {msg['content'][:500]}")
         return "\n".join(lines)
 
+    # 한국어 특화 모델 식별
+    KOREAN_MODEL_PREFIXES = ("exaone", "eeve", "bllossom", "kullm", "ko-", "korean")
+
+    @staticmethod
+    def _is_korean_model(model_name: str) -> bool:
+        """한국어 특화 모델 여부 판별"""
+        if not model_name:
+            return False
+        lower = model_name.lower()
+        return any(lower.startswith(p) or p in lower for p in RAGService.KOREAN_MODEL_PREFIXES)
+
     async def _generate_answer(
         self,
         question: str,
@@ -809,8 +856,17 @@ class RAGService:
         """LLM으로 답변 생성 (시스템 프롬프트 + 대화 기록 + 멀티모달 지원)"""
         history_text = self._build_history_text(history)
 
-        # 시스템 프롬프트 기본값
-        sys_prompt = system_prompt or "당신은 정확한 근거를 바탕으로 답변하는 AI 어시스턴트입니다."
+        # 시스템 프롬프트 기본값 (한국어 모델이면 한국어 최적화 프롬프트)
+        if system_prompt:
+            sys_prompt = system_prompt
+        elif self._is_korean_model(model or self.default_model):
+            sys_prompt = (
+                "당신은 한국어에 능숙한 AI 어시스턴트입니다. "
+                "주어진 문맥을 바탕으로 정확하고 자연스러운 한국어로 답변하세요. "
+                "문맥에 없는 내용은 추측하지 말고 모른다고 답하세요."
+            )
+        else:
+            sys_prompt = "당신은 정확한 근거를 바탕으로 답변하는 AI 어시스턴트입니다."
 
         # 동적으로 프롬프트 구성
         template_parts = [sys_prompt, ""]

@@ -18,6 +18,8 @@ services:
       POSTGRES_USER: rag_user
       POSTGRES_PASSWORD: rag_password
       POSTGRES_DB: rag_db
+    ports:
+      - "45432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -40,11 +42,6 @@ services:
     networks:
       - rag_network
     restart: always
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   # ──────────────────────────────────────────────
   # 3. Redis (캐시 및 세션)
@@ -86,9 +83,7 @@ services:
   # 5. Backend (FastAPI)
   # ──────────────────────────────────────────────
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/rag-backend:latest
     container_name: rag_backend
     env_file:
       - ./backend/.env.production
@@ -98,7 +93,7 @@ services:
       postgres:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
       redis:
         condition: service_healthy
       neo4j:
@@ -108,14 +103,19 @@ services:
     networks:
       - rag_network
     restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # ──────────────────────────────────────────────
   # 6. Frontend (React + Nginx)
   # ──────────────────────────────────────────────
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/rag-frontend:latest
     container_name: rag_frontend
     ports:
       - "80:80"

@@ -98,8 +98,13 @@ class CacheService:
         if not self._connected or not settings.CACHE_ENABLED:
             return False
         try:
-            ttl = ttl or settings.CACHE_TTL_SECONDS
-            await self._client.setex(key, ttl, value)
+            if ttl is None:
+                ttl = settings.CACHE_TTL_SECONDS
+            if ttl == 0:
+                # ttl=0 → 영구 저장 (만료 없음)
+                await self._client.set(key, value)
+            else:
+                await self._client.setex(key, ttl, value)
             return True
         except Exception as e:
             logger.error(f"캐시 저장 실패: {e}")

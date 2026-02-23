@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import { useStore } from "../../contexts/StoreContext";
 import { streamChat, settingsAPI, extractFileText, feedbackAPI } from "../../api/client";
+import { generateUUID } from "../../utils/uuid";
 import {
   Bot,
   User,
@@ -59,6 +60,33 @@ export default function ChatInterface() {
   const [isTyping, setIsTyping] = useState(false);
   const [files, setFiles] = useState([]);
   const [isExtractingFiles, setIsExtractingFiles] = useState(false);
+
+  // 파일 미리보기 ObjectURL 관리 (메모리 누수 방지)
+  const filePreviewUrls = useRef(new Map());
+  const getFilePreviewUrl = useCallback((file) => {
+    if (!filePreviewUrls.current.has(file)) {
+      filePreviewUrls.current.set(file, URL.createObjectURL(file));
+    }
+    return filePreviewUrls.current.get(file);
+  }, []);
+
+  // files 변경 시 제거된 파일의 ObjectURL 해제
+  useEffect(() => {
+    const currentFiles = new Set(files);
+    for (const [file, url] of filePreviewUrls.current) {
+      if (!currentFiles.has(file)) {
+        URL.revokeObjectURL(url);
+        filePreviewUrls.current.delete(file);
+      }
+    }
+    // 컴포넌트 언마운트 시 모든 URL 해제
+    return () => {
+      for (const url of filePreviewUrls.current.values()) {
+        URL.revokeObjectURL(url);
+      }
+      filePreviewUrls.current.clear();
+    };
+  }, [files]);
 
   // UI 상태
   const [isAgentMenuOpen, setIsAgentMenuOpen] = useState(false);
@@ -134,6 +162,19 @@ export default function ChatInterface() {
   useEffect(() => {
     if (isModelMenuOpen) loadAvailableModels();
   }, [isModelMenuOpen, loadAvailableModels]);
+
+  // currentKbId 또는 knowledgeBases 변경 시 selectedKbIds 동기화
+  useEffect(() => {
+    const validIds = knowledgeBases.map((kb) => kb.id);
+    setSelectedKbIds((prev) => {
+      const filtered = prev.filter((id) => validIds.includes(id));
+      if (filtered.length > 0) return filtered;
+      // 유효한 ID가 없으면 currentKbId 또는 첫 번째 KB 사용
+      if (validIds.includes(currentKbId)) return [currentKbId];
+      if (validIds.length > 0) return [validIds[0]];
+      return prev;
+    });
+  }, [currentKbId, knowledgeBases]);
 
   useEffect(() => {
     const handleClickOutside = () => {
@@ -325,7 +366,7 @@ export default function ChatInterface() {
 
     setIsTyping(true);
 
-    const aiMessageId = crypto.randomUUID();
+    const aiMessageId = generateUUID();
     let accumulatedText = "";
 
     const initialThinking = useDeepThink
@@ -402,6 +443,30 @@ export default function ChatInterface() {
                   : s,
               ),
             );
+          } else if (chunk.type === "table") {
+            const timeElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === activeSessionId
+                  ? {
+                      ...s,
+                      messages: s.messages.map((m) =>
+                        m.id === aiMessageId
+                          ? {
+                              ...m,
+                              tableData: {
+                                columns: chunk.columns,
+                                rows: chunk.rows,
+                                total: chunk.total,
+                              },
+                              thinkingTime: timeElapsed,
+                            }
+                          : m,
+                      ),
+                    }
+                  : s,
+              ),
+            );
           } else if (chunk.type === "content") {
             accumulatedText += chunk.content;
             const timeElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -439,7 +504,7 @@ export default function ChatInterface() {
       // 에러 메시지 표시
       const errorMessage = error.message || '메시지 전송 중 오류가 발생했습니다.';
       addMessage({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         role: "assistant",
         text: `⚠️ ${errorMessage}`,
         thinking: "",
@@ -458,26 +523,59 @@ export default function ChatInterface() {
   };
 
   const handleCopy = (text, msgId) => {
-    navigator.clipboard.writeText(text);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {
+        // HTTPS가 아닌 환경에서 clipboard API 실패 시 폴백
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      });
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    }
     setCopiedId(msgId);
     setTimeout(() => setCopiedId(null), 1500);
   };
 
   const handleFeedback = async (msgIndex, isPositive) => {
+    const messages = currentMessages;
+    if (msgIndex < 0 || msgIndex >= messages.length) return;
+
+    const aiMsg = messages[msgIndex];
+    const userMsg = msgIndex > 0 ? messages[msgIndex - 1] : null;
+
+    if (!userMsg || aiMsg.role !== "assistant") return;
+
+    // 낙관적 업데이트: API 결과를 기다리지 않고 즉시 UI 반영
+    const updatedMessages = [...messages];
+    updatedMessages[msgIndex] = {
+      ...updatedMessages[msgIndex],
+      feedback: { is_positive: isPositive },
+    };
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === currentSessionId ? { ...s, messages: updatedMessages } : s,
+      ),
+    );
+
     try {
-      const messages = currentMessages;
-      if (msgIndex < 0 || msgIndex >= messages.length) return;
-
-      const aiMsg = messages[msgIndex];
-      const userMsg = msgIndex > 0 ? messages[msgIndex - 1] : null;
-
-      if (!userMsg || aiMsg.role !== "assistant") return;
-
       await feedbackAPI.create({
         session_id: currentSessionId,
         message_index: msgIndex,
-        user_message: userMsg.text,
-        ai_message: aiMsg.text,
+        user_message: userMsg.text || "",
+        ai_message: aiMsg.text || "",
         is_positive: isPositive,
         agent_id: currentAgent?.id,
         model_name: currentAgent?.model || config.llm,
@@ -485,18 +583,6 @@ export default function ChatInterface() {
         used_web_search: useWebSearch,
         used_deep_think: useDeepThink,
       });
-
-      // 메시지에 피드백 상태 표시
-      const updatedMessages = [...messages];
-      updatedMessages[msgIndex] = {
-        ...updatedMessages[msgIndex],
-        feedback: { is_positive: isPositive },
-      };
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === currentSessionId ? { ...s, messages: updatedMessages } : s,
-        ),
-      );
     } catch (error) {
       console.error("피드백 저장 실패:", error);
     }
@@ -785,7 +871,7 @@ export default function ChatInterface() {
                   >
                     {isImage ? (
                       <img
-                        src={URL.createObjectURL(file)}
+                        src={getFilePreviewUrl(file)}
                         alt={file.name}
                         className="w-6 h-6 object-cover rounded"
                       />
@@ -1096,8 +1182,11 @@ export default function ChatInterface() {
                                       }`}
                                     >
                                       <div className="flex-1 min-w-0">
-                                        <div className="text-xs font-semibold truncate">
+                                        <div className="text-xs font-semibold truncate flex items-center gap-1">
                                           {m.display_name || m.name}
+                                          {m.is_korean && (
+                                            <span className="text-[8px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1 py-0.5 rounded font-bold shrink-0">KR</span>
+                                          )}
                                         </div>
                                       </div>
                                       {isActive && (
@@ -1231,6 +1320,41 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
               <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap leading-relaxed overflow-x-auto">
                 {msg.generatedSql}
               </pre>
+            </div>
+          )}
+
+          {/* 테이블 결과 */}
+          {msg.tableData && (
+            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-100 dark:bg-gray-800">
+                    {msg.tableData.columns.map((col, i) => (
+                      <th key={i} className="px-3 py-2 text-left font-bold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {msg.tableData.rows.map((row, ri) => (
+                    <tr key={ri} className={ri % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800/50"}>
+                      {row.map((cell, ci) => (
+                        <td key={ci} className="px-3 py-2 text-gray-800 dark:text-gray-200 border-b border-gray-100 dark:border-gray-800">
+                          {cell === null || cell === undefined ? (
+                            <span className="text-gray-400 italic">NULL</span>
+                          ) : (
+                            String(cell)
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="px-3 py-1.5 text-[10px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                총 {msg.tableData.total}건
+              </div>
             </div>
           )}
 

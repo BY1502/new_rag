@@ -9,6 +9,11 @@ export default function AdvancedSettings() {
   const [activeModelTab, setActiveModelTab] = useState('llm');
   const [localConfig, setLocalConfig] = useState({ ...config });
 
+  // config가 외부에서 변경되면 localConfig 동기화
+  useEffect(() => {
+    setLocalConfig(prev => ({ ...prev, ...config }));
+  }, [config]);
+
   const [newKeyProvider, setNewKeyProvider] = useState('OpenAI');
   const [newKeyValue, setNewKeyValue] = useState('');
   const [newMcpName, setNewMcpName] = useState('');
@@ -304,6 +309,7 @@ export default function AdvancedSettings() {
                             <div className={`font-bold text-sm ${localConfig.llm === m.name ? 'text-blue-900 dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'}`}>{m.name}</div>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded text-blue-600 dark:text-blue-400 font-medium">로컬</span>
+                              {m.is_korean && <span className="text-[10px] bg-green-100 dark:bg-green-900/30 px-1.5 py-0.5 rounded text-green-600 dark:text-green-400 font-bold">한국어</span>}
                               {m.parameter_size && <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-400">{m.parameter_size}</span>}
                               {m.family && <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-400">{m.family}</span>}
                               {m.quantization && <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-400">{m.quantization}</span>}

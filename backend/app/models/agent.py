@@ -31,4 +31,4 @@ class Agent(Base):
 
     # Relationships
     user = relationship("User", back_populates="agents")
-    sessions = relationship("ChatSession", back_populates="agent", cascade="all, delete-orphan")
+    sessions = relationship("ChatSession", back_populates="agent", cascade="save-update, merge", passive_deletes=True)

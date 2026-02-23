@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
+    libxcb1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -15,8 +17,8 @@ WORKDIR /app
 # Python 의존성 설치 (캐시 레이어 활용)
 COPY requirements.txt .
 
-# PyTorch CPU 버전 설치 (GPU는 Ollama만 사용)
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# PyTorch CUDA 버전 설치
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
 # 나머지 패키지 설치
 RUN pip install --no-cache-dir -r requirements.txt

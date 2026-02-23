@@ -73,6 +73,15 @@ class QdrantStore(BaseVectorStore):
                 logger.error(f"Failed to create collection {self.collection_name}: {e}")
                 raise
 
+    def _has_sparse_vectors(self) -> bool:
+        """컬렉션에 text-sparse 벡터가 설정되어 있는지 확인"""
+        try:
+            info = self.client.get_collection(self.collection_name)
+            sparse_config = info.config.params.sparse_vectors or {}
+            return "text-sparse" in sparse_config
+        except Exception:
+            return False
+
     def _build_vector_store(self) -> QdrantVectorStore:
         """QdrantVectorStore 인스턴스 생성 (dense vector만, 하위 호환)"""
         self._ensure_collection()
@@ -80,6 +89,7 @@ class QdrantStore(BaseVectorStore):
             client=self.client,
             collection_name=self.collection_name,
             embedding=self.embeddings,
+            vector_name="dense",
             content_payload_key="page_content",
             metadata_payload_key="metadata",
         )
@@ -97,13 +107,13 @@ class QdrantStore(BaseVectorStore):
             ]
         )
 
-    def _load_vocabulary(self) -> Dict[str, int]:
+    async def _load_vocabulary(self) -> Dict[str, int]:
         """Redis에서 어휘 로드"""
         try:
             from app.services.cache_service import get_cache_service
             cache = get_cache_service()
             key = f"bm25:vocab:{self.collection_name}"
-            vocab_json = cache.get(key)  # 동기 호출
+            vocab_json = await cache.get(key)
             if vocab_json:
                 return json.loads(vocab_json)
             else:
@@ -113,13 +123,13 @@ class QdrantStore(BaseVectorStore):
             logger.warning(f"Failed to load vocabulary: {e}")
             return {}
 
-    def _save_vocabulary(self, vocab: Dict[str, int]):
+    async def _save_vocabulary(self, vocab: Dict[str, int]):
         """Redis에 어휘 저장 (TTL 없음)"""
         try:
             from app.services.cache_service import get_cache_service
             cache = get_cache_service()
             key = f"bm25:vocab:{self.collection_name}"
-            cache.set(key, json.dumps(vocab), ttl=None)
+            await cache.set(key, json.dumps(vocab), ttl=0)  # 영구 저장
             logger.debug(f"Saved vocabulary ({len(vocab)} terms) for {self.collection_name}")
         except Exception as e:
             logger.error(f"Failed to save vocabulary: {e}")
@@ -166,12 +176,17 @@ class QdrantStore(BaseVectorStore):
         from app.services.bm25_processor import get_bm25_processor
 
         try:
+            # 0. 컬렉션에 sparse vector가 없으면 dense-only로 폴백
+            if not self._has_sparse_vectors():
+                logger.info(f"Collection {self.collection_name} has no sparse vectors, using dense search")
+                return await self.search(query, top_k)
+
             # 1. Dense embedding
             query_embedding = self.embeddings.embed_query(query)
 
             # 2. Sparse vector (BM25)
             bm25 = get_bm25_processor()
-            vocab = self._load_vocabulary()
+            vocab = await self._load_vocabulary()
 
             if not vocab:
                 # 어휘가 없으면 dense-only로 폴백
@@ -246,9 +261,14 @@ class QdrantStore(BaseVectorStore):
         from app.services.bm25_processor import get_bm25_processor
 
         try:
+            # 컬렉션에 sparse vector가 없으면 빈 결과 반환
+            if not self._has_sparse_vectors():
+                logger.warning(f"Collection {self.collection_name} has no sparse vectors")
+                return []
+
             # 1. Sparse vector (BM25)
             bm25 = get_bm25_processor()
-            vocab = self._load_vocabulary()
+            vocab = await self._load_vocabulary()
 
             if not vocab:
                 logger.warning(f"No vocabulary for {self.collection_name}, cannot perform sparse search")
@@ -377,7 +397,7 @@ class QdrantStore(BaseVectorStore):
             bm25 = get_bm25_processor()
 
             # 어휘 업데이트 (기존 + 새 문서)
-            vocab = self._load_vocabulary()
+            vocab = await self._load_vocabulary()
             new_vocab = bm25.build_vocabulary(texts)
 
             # 기존 어휘와 병합 (새 term에 새 index 할당)
@@ -385,7 +405,7 @@ class QdrantStore(BaseVectorStore):
                 if term not in vocab:
                     vocab[term] = len(vocab)
 
-            self._save_vocabulary(vocab)
+            await self._save_vocabulary(vocab)
 
             # Sparse vectors 계산
             sparse_vectors = [
