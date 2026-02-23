@@ -4,7 +4,7 @@
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.feedback import (
@@ -97,7 +97,7 @@ async def list_feedbacks(
     # 통계
     stats_stmt = select(
         func.count(ConversationFeedback.id).label("total"),
-        func.sum(func.cast(ConversationFeedback.is_positive == True, func.Integer)).label("positive"),
+        func.sum(func.cast(ConversationFeedback.is_positive == True, Integer)).label("positive"),
         func.count(ConversationFeedback.rating).label("has_rating"),
         func.avg(ConversationFeedback.rating).label("avg_rating"),
     ).where(ConversationFeedback.user_id == current_user.id)

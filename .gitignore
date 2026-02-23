@@ -3,6 +3,7 @@
 /setup_b
 /.venv
 /backend/.env
+/backend/.env.production
 /frontend/node_modules
 /backend/nul
 /nul

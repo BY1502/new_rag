@@ -20,7 +20,7 @@ export default function Register() {
 
     try {
       if (register) {
-        await register(email, password, name);
+        await register(name, email, password);
         alert('회원가입이 완료되었습니다! 로그인해주세요.');
         navigate('/login');
       } else {

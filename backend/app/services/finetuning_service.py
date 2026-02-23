@@ -1,7 +1,10 @@
 """
 파인튜닝 서비스 - Ollama 모델 학습
+Ollama는 LoRA fine-tuning을 지원하지 않으므로
+SYSTEM 프롬프트 + MESSAGE (few-shot 예제) 방식으로 모델을 커스터마이징합니다.
 """
 import asyncio
+import json
 import logging
 import subprocess
 import tempfile
@@ -11,9 +14,42 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# Modelfile에 포함할 최대 예제 수 (너무 많으면 context 초과)
+MAX_FEWSHOT_EXAMPLES = 20
+
 
 class FineTuningService:
     """Ollama 파인튜닝 서비스"""
+
+    @staticmethod
+    def _load_dataset_examples(dataset_path: str, max_examples: int = MAX_FEWSHOT_EXAMPLES) -> list[dict]:
+        """JSONL 데이터셋에서 학습 예제 로드"""
+        examples = []
+        try:
+            path = Path(dataset_path)
+            if not path.exists():
+                logger.warning(f"Dataset file not found: {dataset_path}")
+                return []
+
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        examples.append(entry)
+                    except json.JSONDecodeError:
+                        continue
+
+                    if len(examples) >= max_examples:
+                        break
+
+            logger.info(f"Loaded {len(examples)} examples from {dataset_path}")
+            return examples
+        except Exception as e:
+            logger.error(f"Failed to load dataset: {e}")
+            return []
 
     @staticmethod
     def generate_modelfile(
@@ -23,24 +59,49 @@ class FineTuningService:
         temperature: float = 0.7,
         system_prompt: Optional[str] = None,
     ) -> str:
-        """Ollama Modelfile 생성"""
+        """Ollama Modelfile 생성 (SYSTEM + MESSAGE few-shot)"""
         modelfile_content = f"""FROM {base_model}
 
-# 파인튜닝된 모델 설정
 PARAMETER temperature {temperature}
 PARAMETER num_ctx 4096
 PARAMETER num_predict 512
 
 """
+        # SYSTEM 프롬프트
         if system_prompt:
             modelfile_content += f'SYSTEM """{system_prompt}"""\n\n'
+        else:
+            modelfile_content += 'SYSTEM """You are a helpful AI assistant trained with user feedback. Answer questions accurately based on the examples you have learned."""\n\n'
 
-        # 어댑터 학습은 Ollama에서 아직 지원하지 않으므로
-        # 대신 ADAPTER나 MESSAGE로 학습 데이터 참조
-        # 현재는 기본 모델 + 시스템 프롬프트만 사용
-        modelfile_content += f"""# 학습 데이터: {dataset_path}
-# 이 모델은 {base_model}을 기반으로 생성되었습니다.
-"""
+        # JSONL에서 학습 데이터를 MESSAGE로 주입 (few-shot)
+        examples = FineTuningService._load_dataset_examples(dataset_path)
+
+        if examples:
+            modelfile_content += f"# {len(examples)}개 학습 예제 (from {dataset_path})\n"
+            for ex in examples:
+                # chat format: {"messages": [{"role": "user", ...}, {"role": "assistant", ...}]}
+                if "messages" in ex:
+                    for msg in ex["messages"]:
+                        role = msg.get("role", "user")
+                        content = msg.get("content", "").replace('"""', '\\"""')
+                        modelfile_content += f'MESSAGE {role} """{content}"""\n'
+                # completion format: {"prompt": ..., "completion": ...}
+                elif "prompt" in ex and "completion" in ex:
+                    prompt = ex["prompt"].replace('"""', '\\"""')
+                    completion = ex["completion"].replace('"""', '\\"""')
+                    modelfile_content += f'MESSAGE user """{prompt}"""\n'
+                    modelfile_content += f'MESSAGE assistant """{completion}"""\n'
+                # instruction format: {"instruction": ..., "response": ...}
+                elif "instruction" in ex and "response" in ex:
+                    instruction = ex["instruction"].replace('"""', '\\"""')
+                    response = ex["response"].replace('"""', '\\"""')
+                    modelfile_content += f'MESSAGE user """{instruction}"""\n'
+                    modelfile_content += f'MESSAGE assistant """{response}"""\n'
+
+            modelfile_content += "\n"
+        else:
+            modelfile_content += f"# 학습 데이터 없음: {dataset_path}\n"
+
         return modelfile_content
 
     @staticmethod

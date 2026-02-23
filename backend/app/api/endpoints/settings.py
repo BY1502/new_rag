@@ -209,6 +209,9 @@ async def get_ollama_models(current_user: User = Depends(get_current_user)):
             resp.raise_for_status()
             data = resp.json()
 
+        # 한국어 특화 모델 식별
+        KOREAN_MODELS = {"exaone", "eeve", "bllossom", "kullm", "ko-", "korean"}
+
         models: List[dict] = []
         for m in data.get("models", []):
             name = m.get("name", "")
@@ -217,12 +220,14 @@ async def get_ollama_models(current_user: User = Depends(get_current_user)):
             param_size = m.get("details", {}).get("parameter_size", "")
             family = m.get("details", {}).get("family", "")
             quant = m.get("details", {}).get("quantization_level", "")
+            is_korean = any(k in name.lower() for k in KOREAN_MODELS)
             models.append({
                 "name": name,
                 "size_gb": size_gb,
                 "parameter_size": param_size,
                 "family": family,
                 "quantization": quant,
+                "is_korean": is_korean,
             })
 
         return {"models": models, "ollama_url": settings.OLLAMA_BASE_URL}
@@ -257,14 +262,24 @@ async def get_available_models(
             resp.raise_for_status()
             data = resp.json()
 
+        # 한국어 특화 모델 식별
+        KOREAN_MODELS = {"exaone", "eeve", "bllossom", "kullm", "ko-", "korean"}
+
         for m in data.get("models", []):
             name = m.get("name", "")
             param_size = m.get("details", {}).get("parameter_size", "")
+            family = m.get("details", {}).get("family", "")
+
+            # 한국어 모델 태그
+            is_korean = any(k in name.lower() for k in KOREAN_MODELS)
+            lang_tag = " [한국어]" if is_korean else ""
+
             all_models.append({
                 "name": name,
                 "provider": "ollama",
-                "display_name": f"{name} {f'({param_size})' if param_size else ''}".strip(),
-                "type": "local"
+                "display_name": f"{name}{lang_tag} {f'({param_size})' if param_size else ''}".strip(),
+                "type": "local",
+                "is_korean": is_korean,
             })
     except Exception as e:
         logger.warning(f"Ollama 모델 로드 실패: {e}")

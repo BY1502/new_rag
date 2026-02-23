@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { settingsAPI, knowledgeAPI, agentsAPI, sessionsAPI, mcpAPI } from '../api/client';
+import { generateUUID } from '../utils/uuid';
 
 const StoreContext = createContext();
 
@@ -267,6 +268,11 @@ export function StoreProvider({ children }) {
           created_at: b.created_at,
         }));
         setKnowledgeBases(mapped);
+        // 현재 KB ID가 로드된 목록에 없으면 첫 번째 KB로 변경
+        const kbIds = mapped.map(kb => kb.id);
+        if (!kbIds.includes(currentKbId)) {
+          setCurrentKbId(kbIds[0]);
+        }
       }
 
       // 에이전트 목록 로드
@@ -418,7 +424,7 @@ export function StoreProvider({ children }) {
 
   const addApiKey = useCallback((provider, key) => {
     setApiKeys(prev => [...prev, {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       provider,
       key,
       date: new Date().toLocaleDateString()
@@ -430,7 +436,7 @@ export function StoreProvider({ children }) {
   }, []);
 
   const addMcpServer = useCallback(async (server) => {
-    const serverId = crypto.randomUUID();
+    const serverId = generateUUID();
     const newServer = {
       id: serverId,
       status: 'connected',
@@ -497,7 +503,7 @@ export function StoreProvider({ children }) {
           ...session,
           messages: [...session.messages, {
             ...msg,
-            id: msg.id || crypto.randomUUID(),
+            id: msg.id || generateUUID(),
             time: new Date().toLocaleTimeString()
           }]
         };
@@ -507,7 +513,7 @@ export function StoreProvider({ children }) {
   }, [currentSessionId]);
 
   const createNewSession = useCallback(() => {
-    const newId = crypto.randomUUID();
+    const newId = generateUUID();
     setSessions(prev => [{ id: newId, title: '새로운 대화', messages: [] }, ...prev]);
     setCurrentSessionId(newId);
     setCurrentView('chat');
@@ -517,18 +523,31 @@ export function StoreProvider({ children }) {
     setSessions(prev => prev.map(s => s.id === id ? { ...s, title } : s));
   }, []);
 
-  const deleteSession = useCallback((id) => {
+  const deleteSession = useCallback(async (id) => {
+    // 백엔드에서 세션 삭제
+    try {
+      await sessionsAPI.delete(id);
+    } catch (e) {
+      console.error('세션 삭제 실패:', e);
+    }
+
     setSessions(prev => {
       const filtered = prev.filter(s => s.id !== id);
-      if (id === currentSessionId) {
-        if (filtered.length > 0) {
-          setCurrentSessionId(filtered[0].id);
-        } else {
-          createNewSession();
-        }
-      }
       return filtered;
     });
+
+    // 현재 세션이 삭제된 경우 다른 세션으로 전환
+    if (id === currentSessionId) {
+      setSessions(prev => {
+        if (prev.length > 0) {
+          setCurrentSessionId(prev[0].id);
+        } else {
+          // 모든 세션이 삭제되면 새 세션 생성은 다음 렌더 사이클에서
+          setTimeout(() => createNewSession(), 0);
+        }
+        return prev;
+      });
+    }
   }, [currentSessionId, createNewSession]);
 
   const contextValue = useMemo(() => ({

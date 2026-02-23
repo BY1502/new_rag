@@ -30,4 +30,9 @@ async def get_current_user(
     user = await get_user_by_email(db, email=email)
     if user is None:
         raise credentials_exception
+    if not getattr(user, 'is_active', True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="비활성화된 계정입니다",
+        )
     return user

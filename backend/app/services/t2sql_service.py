@@ -15,8 +15,6 @@ from typing import Any, AsyncGenerator, Optional
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_community.utilities import SQLDatabase
-from tabulate import tabulate
-
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -188,31 +186,29 @@ class T2SQLService:
             total = len(rows)
 
             if rows:
-                table_str = tabulate(rows, headers=columns, tablefmt="pipe")
                 yield json.dumps({
-                    "type": "content",
-                    "content": (
-                        f"**실행된 SQL:**\n```sql\n{sql}\n```\n\n"
-                        f"**결과 ({total}건):**\n\n{table_str}"
-                    )
+                    "type": "table",
+                    "columns": columns,
+                    "rows": rows,
+                    "total": total,
                 }) + "\n"
             else:
                 yield json.dumps({
                     "type": "content",
-                    "content": f"**실행된 SQL:**\n```sql\n{sql}\n```\n\n결과가 없습니다."
+                    "content": "결과가 없습니다."
                 }) + "\n"
 
         except asyncio.TimeoutError:
             logger.error("[T2SQL] SQL execution timeout (30s)")
             yield json.dumps({
                 "type": "content",
-                "content": f"SQL 실행 타임아웃 (30초).\n\n**생성된 SQL:**\n```sql\n{sql}\n```"
+                "content": "SQL 실행 타임아웃 (30초)."
             }) + "\n"
         except Exception as e:
             logger.error(f"[T2SQL] SQL execution error: {e}")
             yield json.dumps({
                 "type": "content",
-                "content": f"SQL 실행 오류: {e}\n\n**생성된 SQL:**\n```sql\n{sql}\n```"
+                "content": f"SQL 실행 오류: {e}"
             }) + "\n"
 
 

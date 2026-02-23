@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../contexts/StoreContext';
 import AgentEditorModal from './AgentEditorModal';
+import { generateUUID } from '../../utils/uuid';
 import { Plus, Search, Bot, MoreHorizontal, Edit, Trash2, CheckCircle, XCircle, Clock, Lock, Sparkles, FileText } from '../../components/ui/Icon'; // ✅ 아이콘 추가
 
 export default function AgentList() {
@@ -56,7 +57,7 @@ export default function AgentList() {
       updateAgent(editingAgent.id, formData);
     } else {
       addAgent({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         ...formData,
         updated_at: new Date().toLocaleDateString()
       });

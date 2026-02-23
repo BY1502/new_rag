@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useStore } from '../../contexts/StoreContext';
 import { uploadFileToBackend, knowledgeAPI, externalServicesAPI } from '../../api/client';
+import { generateUUID } from '../../utils/uuid';
 import { Upload, FileText, Trash2, CheckCircle, Database, Plus, Settings, AlertCircle, Loader2, Search, Sliders, Info, Brain, AlignJustify, Split, ArrowLeft, FolderUp, Clock, Share2, Network, GitBranch, RefreshCw, Layers, Cpu, Server } from '../../components/ui/Icon';
 import { Modal } from '../../components/ui/Modal';
 import ChunksView from './ChunksView';
@@ -72,7 +73,7 @@ export default function KnowledgeManager() {
   const handleFiles = async (files) => {
     // 1. UI에 먼저 표시 (Uploading 상태)
     const newFiles = files.map(file => ({ 
-      id: crypto.randomUUID(), 
+      id: generateUUID(), 
       name: file.name, 
       size: (file.size / 1024).toFixed(1) + ' KB', 
       type: file.type || 'Unknown', 
@@ -110,7 +111,7 @@ export default function KnowledgeManager() {
     if (!kbForm.name.trim()) return alert('이름을 입력해주세요.');
     const newKbData = { name: kbForm.name, description: kbForm.description, config: { chunkingMethod: kbForm.chunkingMethod, chunkSize: kbForm.chunkSize, chunkOverlap: kbForm.chunkOverlap, semanticThreshold: kbForm.semanticThreshold }, externalServiceId: kbForm.externalServiceId || '' };
     if (isNew) {
-      const kbId = crypto.randomUUID();
+      const kbId = generateUUID();
       try {
         await knowledgeAPI.createBase({ kb_id: kbId, name: kbForm.name, description: kbForm.description, chunk_size: kbForm.chunkSize, chunk_overlap: kbForm.chunkOverlap, chunking_method: kbForm.chunkingMethod, semantic_threshold: kbForm.semanticThreshold, external_service_id: kbForm.externalServiceId || null });
       } catch (e) { console.error('KB create API failed:', e); }
