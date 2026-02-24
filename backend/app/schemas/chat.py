@@ -28,6 +28,7 @@ class ChatRequest(BaseModel):
     use_rerank: bool = Field(default=False, description="Rerank 사용 여부")
     search_provider: Optional[str] = Field(default=None, max_length=50, description="검색 공급자 ID (ddg, serper)")
     search_mode: SearchMode = Field(default=SearchMode.hybrid, description="검색 모드: dense(의미), sparse(키워드), hybrid(융합)")
+    dense_weight: float = Field(default=0.5, ge=0.0, le=1.0, description="하이브리드 검색 시 Dense 비율 (0.0=키워드만, 1.0=의미만)")
     images: List[str] = Field(default_factory=list, description="Base64 인코딩된 이미지 리스트 (멀티모달)")
     use_sql: bool = Field(default=False, description="Text-to-SQL 모드 사용 여부")
     db_connection_id: Optional[str] = Field(default=None, max_length=100, description="T2SQL용 DB 연결 ID")

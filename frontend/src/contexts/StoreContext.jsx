@@ -24,6 +24,7 @@ const backendToFrontend = (b) => ({
   searchTopK: b.search_top_k,
   useRerank: b.use_rerank,
   searchMode: b.search_mode || 'hybrid',
+  denseWeight: b.dense_weight ?? 0.5,
   useMultimodalSearch: b.use_multimodal_search || false,
   systemPrompt: b.system_prompt || "",
   theme: b.theme,
@@ -42,6 +43,7 @@ const frontendToBackend = (f) => ({
   search_top_k: f.searchTopK,
   use_rerank: f.useRerank,
   search_mode: f.searchMode || 'hybrid',
+  dense_weight: f.denseWeight ?? 0.5,
   use_multimodal_search: f.useMultimodalSearch || false,
   system_prompt: f.systemPrompt,
   theme: f.theme,
@@ -60,6 +62,7 @@ const CONFIG_DEFAULTS = {
   retrieval: 'hybrid',
   useRerank: true,
   searchMode: 'hybrid',
+  denseWeight: 0.5,
   useMultimodalSearch: false,
   systemPrompt: "당신은 정확한 근거를 바탕으로 답변하는 AI 어시스턴트입니다.",
   theme: 'Light',
@@ -212,6 +215,29 @@ export function StoreProvider({ children }) {
   const [currentSessionId, setCurrentSessionId] = useState('new');
   const [currentView, setCurrentView] = useState('home');
 
+  // 세션 전환 시 백엔드에서 메시지 로드
+  useEffect(() => {
+    if (!currentSessionId || currentSessionId === 'new' || !isAuthenticated) return;
+    const session = sessions.find(s => s.id === currentSessionId);
+    // 이미 메시지가 로드되어 있으면 스킵
+    if (session && session.messages && session.messages.length > 0) return;
+    sessionsAPI.getMessages(currentSessionId).then(result => {
+      if (result.messages && result.messages.length > 0) {
+        const mapped = result.messages.map(m => ({
+          id: m.id || generateUUID(),
+          role: m.role,
+          content: m.content,
+          text: m.content,
+          thinking: m.thinking,
+          time: m.created_at ? new Date(m.created_at).toLocaleTimeString() : '',
+        }));
+        setSessions(prev => prev.map(s =>
+          s.id === currentSessionId ? { ...s, messages: mapped } : s
+        ));
+      }
+    }).catch(() => {});
+  }, [currentSessionId, isAuthenticated]);
+
   // 로그인 시 백엔드에서 설정 + KB 로드
   useEffect(() => {
     if (!isAuthenticated) {
@@ -253,20 +279,40 @@ export function StoreProvider({ children }) {
       const kbResult = await knowledgeAPI.listBases();
       if (!mounted) return;
       if (kbResult.bases && kbResult.bases.length > 0) {
-        const mapped = kbResult.bases.map(b => ({
-          id: b.kb_id,
-          name: b.name,
-          description: b.description || '',
-          files: [],
-          config: { chunkSize: b.chunk_size, chunkOverlap: b.chunk_overlap, chunkingMethod: b.chunking_method || 'fixed', semanticThreshold: b.semantic_threshold || 0.75 },
-          chunkSize: b.chunk_size,
-          chunkOverlap: b.chunk_overlap,
-          chunkingMethod: b.chunking_method || 'fixed',
-          semanticThreshold: b.semantic_threshold || 0.75,
-          file_count: b.file_count || 0,
-          externalServiceId: b.external_service_id || '',
-          created_at: b.created_at,
-        }));
+        // 각 KB의 파일 목록도 병렬로 로드
+        const fileResults = await Promise.allSettled(
+          kbResult.bases.map(b => knowledgeAPI.getFilesList(b.kb_id))
+        );
+        const mapped = kbResult.bases.map((b, idx) => {
+          const fileData = fileResults[idx]?.status === 'fulfilled' ? fileResults[idx].value : { files: [] };
+          const files = (fileData.files || []).map((f, fIdx) => ({
+            id: f.source || `file-${fIdx}`,
+            name: f.filename || f.source,
+            source: f.source,
+            size: f.image_size ? `${(f.image_size / 1024).toFixed(1)} KB` : '',
+            type: f.type || 'text',
+            status: f.status || 'ready',
+            chunk_count: f.chunk_count || 0,
+            thumbnail_path: f.thumbnail_path,
+            image_path: f.image_path,
+            image_dimensions: f.image_dimensions,
+            error_message: f.error_message,
+          }));
+          return {
+            id: b.kb_id,
+            name: b.name,
+            description: b.description || '',
+            files,
+            config: { chunkSize: b.chunk_size, chunkOverlap: b.chunk_overlap, chunkingMethod: b.chunking_method || 'fixed', semanticThreshold: b.semantic_threshold || 0.75 },
+            chunkSize: b.chunk_size,
+            chunkOverlap: b.chunk_overlap,
+            chunkingMethod: b.chunking_method || 'fixed',
+            semanticThreshold: b.semantic_threshold || 0.75,
+            file_count: files.length || b.file_count || 0,
+            externalServiceId: b.external_service_id || '',
+            created_at: b.created_at,
+          };
+        });
         setKnowledgeBases(mapped);
         // 현재 KB ID가 로드된 목록에 없으면 첫 번째 KB로 변경
         const kbIds = mapped.map(kb => kb.id);
@@ -490,26 +536,39 @@ export function StoreProvider({ children }) {
   }, []);
 
   const addMessage = useCallback((msg) => {
+    const msgId = msg.id || generateUUID();
+    const isNew = !msg.id; // 새 메시지인 경우에만 백엔드 저장
+
     setSessions(prev => prev.map(session => {
       if (session.id === currentSessionId) {
-        const exists = session.messages.find(m => m.id === msg.id);
+        const exists = session.messages.find(m => m.id === msgId);
         if (exists) {
           return {
             ...session,
-            messages: session.messages.map(m => m.id === msg.id ? { ...m, ...msg } : m)
+            messages: session.messages.map(m => m.id === msgId ? { ...m, ...msg } : m)
           };
         }
         return {
           ...session,
           messages: [...session.messages, {
             ...msg,
-            id: msg.id || generateUUID(),
+            id: msgId,
             time: new Date().toLocaleTimeString()
           }]
         };
       }
       return session;
     }));
+
+    // 백엔드에 메시지 저장 (새 메시지 & role이 있는 경우만)
+    if (isNew && msg.role && currentSessionId) {
+      sessionsAPI.addMessage(currentSessionId, {
+        role: msg.role,
+        content: msg.content || msg.text || '',
+        thinking: msg.thinking || null,
+        metadata_json: null,
+      }).catch(e => console.warn('메시지 백엔드 저장 실패:', e));
+    }
   }, [currentSessionId]);
 
   const createNewSession = useCallback(() => {
@@ -517,6 +576,9 @@ export function StoreProvider({ children }) {
     setSessions(prev => [{ id: newId, title: '새로운 대화', messages: [] }, ...prev]);
     setCurrentSessionId(newId);
     setCurrentView('chat');
+    // 백엔드에도 세션 생성
+    sessionsAPI.create({ session_id: newId, title: '새로운 대화' })
+      .catch(e => console.warn('세션 백엔드 생성 실패:', e));
   }, []);
 
   const renameSession = useCallback((id, title) => {

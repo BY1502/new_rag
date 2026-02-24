@@ -255,6 +255,7 @@ class RAGService:
         use_rerank: bool = False,
         search_provider: Optional[str] = None,
         search_mode: str = "hybrid",
+        dense_weight: float = 0.5,
         images: Optional[List[str]] = None,
         use_sql: bool = False,
         db_connection_id: Optional[str] = None,
@@ -395,6 +396,7 @@ class RAGService:
                     top_k=effective_top_k,
                     use_rerank=use_rerank,
                     search_mode=search_mode,
+                    dense_weight=dense_weight,
                     use_multimodal_search=use_multimodal_search,
                     db=db,
                 )
@@ -600,6 +602,7 @@ class RAGService:
         top_k: int = 4,
         use_rerank: bool = False,
         search_mode: str = "hybrid",
+        dense_weight: float = 0.5,
         use_multimodal_search: bool = False,
         db=None,
     ) -> str:
@@ -662,7 +665,7 @@ class RAGService:
             factory = get_retriever_factory()
             for kb_id in kb_ids:
                 try:
-                    retriever = await factory.get_retriever(user_id, kb_id, top_k, db, search_mode)
+                    retriever = await factory.get_retriever(user_id, kb_id, top_k, db, search_mode, dense_weight=dense_weight)
                     docs = await retriever.ainvoke(query)
                     all_docs.extend(docs)
                 except Exception as e:
@@ -866,7 +869,12 @@ class RAGService:
                 "문맥에 없는 내용은 추측하지 말고 모른다고 답하세요."
             )
         else:
-            sys_prompt = "당신은 정확한 근거를 바탕으로 답변하는 AI 어시스턴트입니다."
+            sys_prompt = (
+                "당신은 도움이 되는 AI 어시스턴트입니다. "
+                "참고 문맥이 제공되면 해당 내용을 바탕으로 정확하게 답변하세요. "
+                "참고 문맥이 없거나 관련 문서를 찾지 못한 경우에도 가능한 범위 내에서 답변하세요. "
+                "절대로 '권한이 없다', '접근할 수 없다'와 같은 표현을 사용하지 마세요."
+            )
 
         # 동적으로 프롬프트 구성
         template_parts = [sys_prompt, ""]
@@ -876,6 +884,14 @@ class RAGService:
 
         if context:
             template_parts.append("[참고 문맥]\n{context}\n")
+        else:
+            template_parts.append(
+                "[참고 문맥]\n"
+                "검색된 관련 문서가 없습니다. "
+                "지식베이스에 관련 문서가 아직 업로드되지 않았거나, 질문과 관련된 내용이 없을 수 있습니다. "
+                "가지고 있는 일반 지식을 바탕으로 최선의 답변을 제공하세요. "
+                "단, 지식베이스에서 관련 문서를 찾지 못했다는 점을 답변 시작 부분에 간략히 언급해주세요.\n"
+            )
 
         template_parts.append("[질문]\n{question}\n\n답변:")
 

@@ -114,7 +114,7 @@ class IngestionService:
 
     @property
     def converter(self):
-        """Docling DocumentConverter (지연 로딩)"""
+        """Docling DocumentConverter (지연 로딩) - 수식 인식 포함"""
         if self._converter is None:
             try:
                 from docling.document_converter import DocumentConverter, PdfFormatOption
@@ -125,6 +125,13 @@ class IngestionService:
                 pipeline_options.do_ocr = True
                 pipeline_options.do_table_structure = True
                 pipeline_options.table_structure_options.do_cell_matching = True
+
+                # 수식 인식 활성화 (LaTeX 변환)
+                try:
+                    pipeline_options.do_formula_enrichment = True
+                    logger.info("[수집] Docling 수식 인식(formula enrichment) 활성화")
+                except Exception as e:
+                    logger.warning(f"[수집] 수식 인식 활성화 실패 (무시): {e}")
 
                 self._converter = DocumentConverter(
                     format_options={
@@ -172,21 +179,93 @@ class IngestionService:
             self._image_ocr = get_image_ocr_service()
         return self._image_ocr
 
+    def _detect_graph_llm_model(self) -> str:
+        """
+        그래프 추출에 사용할 LLM 모델 결정
+
+        Tool calling을 지원하는 설치된 모델을 자동 감지합니다.
+        설정된 LLM_MODEL이 없거나 tool calling 미지원이면 대체 모델 사용.
+        """
+        # 기본 설정 모델
+        configured = settings.LLM_MODEL
+
+        # Tool calling 지원하는 모델 우선순위 (Ollama)
+        # 설치 여부를 실제 확인하기보다 설정된 모델을 먼저 시도
+        tool_calling_models = [
+            configured,
+            "gemma3:27b", "gemma3:12b",
+            "qwen2.5:14b", "qwen2.5:7b",
+            "llama3.1:8b", "llama3.1",
+            "mistral:7b",
+        ]
+
+        # Ollama에서 실제 설치된 모델 확인
+        try:
+            import httpx
+            resp = httpx.get(f"{settings.OLLAMA_BASE_URL}/api/tags", timeout=5)
+            if resp.status_code == 200:
+                installed = {m["name"] for m in resp.json().get("models", [])}
+                # tool calling 미지원 모델 제외
+                no_tool_calling = {"llava", "bge-m3", "nomic-embed"}
+
+                for model in tool_calling_models:
+                    # 정확 매치 또는 prefix 매치
+                    if model in installed or any(m.startswith(model.split(":")[0]) for m in installed):
+                        base = model.split(":")[0]
+                        if not any(ntc in base for ntc in no_tool_calling):
+                            logger.info(f"[수집] 그래프 LLM 선택: {model}")
+                            return model
+
+                # 설치된 모델 중 tool calling 가능한 아무 모델
+                for m in installed:
+                    base = m.split(":")[0]
+                    if not any(ntc in base for ntc in no_tool_calling):
+                        logger.info(f"[수집] 그래프 LLM 폴백: {m}")
+                        return m
+
+        except Exception as e:
+            logger.warning(f"[수집] Ollama 모델 목록 조회 실패: {e}")
+
+        return configured
+
     @property
     def llm_transformer(self):
-        """LLM Graph Transformer (지연 로딩)"""
+        """LLM Graph Transformer (지연 로딩) - Tool Calling 미지원 모델 대응"""
         if self._llm_transformer is None:
-            if self._llm is None:
+            # 그래프 추출에 적합한 모델 선택
+            graph_model = self._detect_graph_llm_model()
+
+            if self._llm is None or graph_model != settings.LLM_MODEL:
                 self._llm = ChatOllama(
-                    model=settings.LLM_MODEL,
+                    model=graph_model,
                     temperature=settings.LLM_TEMPERATURE
                 )
-            self._llm_transformer = LLMGraphTransformer(
-                llm=self._llm,
-                allowed_nodes=["Entity", "Concept", "Person", "Place", "Event"],
-                allowed_relationships=["RELATION", "INCLUDES", "INVOLVES", "CAUSES"],
-                strict_mode=False
-            )
+
+            try:
+                self._llm_transformer = LLMGraphTransformer(
+                    llm=self._llm,
+                    allowed_nodes=["Entity", "Concept", "Person", "Place", "Event"],
+                    allowed_relationships=["RELATION", "INCLUDES", "INVOLVES", "CAUSES"],
+                    strict_mode=False,
+                )
+                logger.info(f"[수집] LLMGraphTransformer 초기화 (model={graph_model})")
+            except Exception as e:
+                logger.warning(f"[수집] LLMGraphTransformer 초기화 실패 ({graph_model}): {e}")
+                # prompt-based 폴백 (tool calling 미지원 모델용)
+                try:
+                    self._llm_transformer = LLMGraphTransformer(
+                        llm=self._llm,
+                        allowed_nodes=["Entity", "Concept", "Person", "Place", "Event"],
+                        allowed_relationships=["RELATION", "INCLUDES", "INVOLVES", "CAUSES"],
+                        strict_mode=False,
+                        node_properties=False,
+                        relationship_properties=False,
+                    )
+                    logger.info(f"[수집] LLMGraphTransformer 폴백 초기화 (simplified, model={graph_model})")
+                except Exception as e2:
+                    logger.error(f"[수집] LLMGraphTransformer 완전 실패: {e2}")
+                    self._llm_transformer = None
+
         return self._llm_transformer
 
     def _get_safe_filename(self, original_filename: str) -> str:
@@ -199,18 +278,104 @@ class IngestionService:
                 ext = ""
         return f"{uuid.uuid4()}{ext}"
 
-    @staticmethod
-    def clean_markdown(text: str) -> str:
-        """마크다운 텍스트 정리"""
+    # 수학 기호 유니코드 범위
+    _MATH_SYMBOLS = (
+        '\u2200-\u22FF'   # Mathematical Operators (∀∁∂∃...≤≥≠≈)
+        '\u2A00-\u2AFF'   # Supplemental Mathematical Operators
+        '\u27C0-\u27EF'   # Miscellaneous Mathematical Symbols-A
+        '\u2980-\u29FF'   # Miscellaneous Mathematical Symbols-B
+        '\u00B1'          # ± (plus-minus)
+        '\u00D7'          # × (multiplication)
+        '\u00F7'          # ÷ (division)
+    )
+
+    @classmethod
+    def clean_markdown(cls, text: str) -> str:
+        """
+        마크다운 텍스트 정리 및 수식 클린업
+
+        Docling이 수식을 파싱할 때 발생하는 문제:
+        - 수학 기호가 중복 출력 (≤≤, ≥≥ 등)
+        - 수식이 의미없는 기호 나열로 변환
+        - LaTeX가 깨져서 출력
+
+        수식 enrichment가 활성화되면 $...$ 형식의 LaTeX는 보존합니다.
+        """
+        # ===== Phase 1: LaTeX 수식 블록 보존 =====
+        # $$ ... $$ 또는 $ ... $ 내부의 LaTeX는 보존
+        # 보존할 LaTeX 블록을 임시 치환
+        latex_blocks = []
+
+        def _save_latex(match):
+            latex_blocks.append(match.group(0))
+            return f"__LATEX_BLOCK_{len(latex_blocks) - 1}__"
+
+        # $$...$$ 블록 보존
+        text = re.sub(r'\$\$[^$]+?\$\$', _save_latex, text, flags=re.DOTALL)
+        # $...$ 인라인 수식 보존 (유효한 LaTeX만 - 문자/숫자 포함)
+        text = re.sub(r'\$[^$\n]{2,}?\$', _save_latex, text)
+
+        # ===== Phase 2: 깨진 수식 패턴 정리 =====
+        # 2a. 동일한 수학 기호가 연속 반복되는 패턴 (≤≤ → ≤, ∫∫∫ → ∫ 등)
+        text = re.sub(
+            rf'([{cls._MATH_SYMBOLS}])\1+',
+            r'\1', text
+        )
+
+        # 2b. 빈 수식 블록 제거 ($$ $$, $ $)
+        text = re.sub(r'\$\$\s*\$\$', '', text)
+        text = re.sub(r'\$\s*\$', '', text)
+
+        # 2c. 수학 기호만 공백으로 나열된 패턴 정리 (3개 이상 연속)
+        #     예: "  ≤  ≤  ≤  " → 제거
+        text = re.sub(
+            rf'(\s*[{cls._MATH_SYMBOLS}]\s*){{3,}}',
+            ' ',
+            text
+        )
+
+        # 2d. 줄 전체가 수학 기호/괄호/공백만으로 구성된 경우 (의미없는 수식 잔여물)
+        #     단, 숫자나 알파벳이 포함되어 있으면 유효한 수식일 수 있으므로 보존
+        text = re.sub(
+            rf'^[{cls._MATH_SYMBOLS}\s\(\)\[\]{{}}\|_^]+$',
+            '',
+            text,
+            flags=re.MULTILINE
+        )
+
+        # 2e. Docling 특유의 깨진 출력: 공백+기호 반복 패턴
+        #     예: "   ≤≤ \n  ≤≤ "
+        text = re.sub(
+            rf'^\s*[{cls._MATH_SYMBOLS}]{{1,3}}\s*$',
+            '',
+            text,
+            flags=re.MULTILINE
+        )
+
+        # ===== Phase 3: LaTeX 블록 복원 =====
+        for i, block in enumerate(latex_blocks):
+            text = text.replace(f"__LATEX_BLOCK_{i}__", block)
+
+        # ===== Phase 4: 마크다운 라인 정리 =====
         lines = []
+        prev_empty = False
         for line in text.split('\n'):
             stripped = line.strip()
+
+            # 빈 줄 연속 방지 (최대 1개)
             if not stripped:
+                if not prev_empty:
+                    lines.append('')
+                    prev_empty = True
                 continue
+            prev_empty = False
+
             # 테이블 구분선 제거
             if re.match(r'^[|\-+\s]+$', stripped):
                 continue
+
             lines.append(line)
+
         return '\n'.join(lines)
 
     async def save_file(self, file: UploadFile, kb_id: str, user_id: int) -> Tuple[str, str]:
@@ -246,6 +411,20 @@ class IngestionService:
                 file_path.unlink()
             raise IngestionError(f"파일 저장 실패: {str(e)}")
 
+    async def _update_file_record(self, file_record_id: Optional[int], status: str,
+                                    chunk_count: int = 0, error_message: str = None):
+        """KnowledgeFile 레코드 상태 업데이트 (독립 DB 세션 사용)"""
+        if not file_record_id:
+            return
+        try:
+            from app.db.session import AsyncSessionLocal
+            from app.crud.knowledge_base import update_file_status
+            async with AsyncSessionLocal() as db:
+                await update_file_status(db, file_record_id, status, chunk_count, error_message)
+                logger.info(f"[수집] 파일 레코드 업데이트: id={file_record_id}, status={status}")
+        except Exception as e:
+            logger.warning(f"[수집] 파일 레코드 업데이트 실패: {e}")
+
     async def process_file_background(
         self,
         file_path: str,
@@ -257,6 +436,8 @@ class IngestionService:
         chunking_method: str = "fixed",
         semantic_threshold: float = 0.75,
         qdrant_client=None,
+        file_record_id: Optional[int] = None,
+        vision_model: Optional[str] = None,
     ):
         """
         백그라운드에서 파일을 처리 (비동기 파이프라인)
@@ -282,10 +463,13 @@ class IngestionService:
 
         file_path_obj = Path(file_path)
 
+        final_splits = []  # 청크 수 추적용
+
         try:
             # 파일 존재 확인
             if not file_path_obj.exists():
                 logger.error(f"[수집] 파일 없음: {file_path}")
+                await self._update_file_record(file_record_id, "error", error_message="파일을 찾을 수 없습니다")
                 return
 
             # 파일 확장자 확인
@@ -303,7 +487,8 @@ class IngestionService:
                         [saved_image_path],
                         base_metadata,
                         kb_id,
-                        qdrant_client=qdrant_client
+                        qdrant_client=qdrant_client,
+                        vision_model=vision_model,
                     )
                     logger.info(f"[수집] 이미지 인덱싱 완료: {original_filename}")
                 else:
@@ -355,13 +540,18 @@ class IngestionService:
                         extracted_images,
                         base_metadata,
                         kb_id,
-                        qdrant_client=qdrant_client
+                        qdrant_client=qdrant_client,
+                        vision_model=vision_model,
                     )
 
+            # 청크 수 계산 및 파일 레코드 업데이트
+            chunk_count = len(final_splits) if not is_image else 1
+            await self._update_file_record(file_record_id, "completed", chunk_count=chunk_count)
             logger.info(f"[수집] 백그라운드 처리 완료: {original_filename} ✓")
 
         except Exception as e:
             logger.error(f"[수집] 백그라운드 처리 실패 ({original_filename}): {e}", exc_info=True)
+            await self._update_file_record(file_record_id, "error", error_message=str(e)[:500])
 
         finally:
             # 임시 파일 삭제
@@ -537,7 +727,30 @@ class IngestionService:
             except Exception as e:
                 logger.warning(f"[수집] Docling 파싱 실패: {e}, PyPDF 폴백 사용")
 
-        # Strategy 2: PyPDF Fallback (단순 텍스트 추출)
+        # Strategy 2: HWP 파일 처리 (한글 문서)
+        ext = Path(file_path).suffix.lower()
+        if ext in (".hwp", ".hwpx"):
+            try:
+                logger.info("[수집] HWP 파일 파싱 중...")
+                loop = asyncio.get_running_loop()
+                full_text = await loop.run_in_executor(None, self._parse_hwp, file_path)
+                full_text = self.clean_markdown(full_text)
+
+                if full_text.strip():
+                    final_splits = self._split_text(
+                        full_text, chunk_size, chunk_overlap,
+                        chunking_method=chunking_method,
+                        semantic_threshold=semantic_threshold,
+                    )
+                    if final_splits:
+                        return final_splits, image_paths
+
+            except Exception as e:
+                logger.error(f"[수집] HWP 파싱 실패: {e}")
+
+            return final_splits, image_paths
+
+        # Strategy 3: PyPDF Fallback (단순 텍스트 추출)
         try:
             logger.info("[수집] PyPDF로 폴백 파싱 중...")
             loader = PyPDFLoader(file_path)
@@ -594,29 +807,83 @@ class IngestionService:
         semantic_threshold: float = 0.75,
     ) -> List[Document]:
         """
-        시맨틱 청킹: 의미 변화 지점에서 텍스트를 분할
+        LLM 기반 시맨틱 청킹: LLM이 텍스트를 읽고 의미 단위로 분할
 
-        임베딩 유사도를 기반으로 자연스러운 문맥 경계에서 분할
-        고정 크기 분할보다 의미적으로 일관된 청크 생성
+        LLM이 직접 텍스트의 의미적 경계를 판단하여 분할점을 결정합니다.
+        긴 텍스트는 윈도우 단위로 나눠 처리하고, 각 윈도우 내에서
+        LLM이 의미적으로 자연스러운 분할점을 찾아 청크를 생성합니다.
         """
-        try:
-            from langchain_experimental.text_splitter import SemanticChunker
+        logger.info(f"[수집] LLM 기반 시맨틱 청킹 시작...")
 
-            logger.info(f"[수집] 시맨틱 청킹 시작 (임계값={semantic_threshold})...")
-            embeddings = self.vector_service.embeddings
-            chunker = SemanticChunker(
-                embeddings=embeddings,
-                breakpoint_threshold_type="percentile",
-                breakpoint_threshold_amount=semantic_threshold * 100,
+        try:
+            # LLM 모델 선택 (그래프 추출과 동일 로직)
+            graph_model = self._detect_graph_llm_model()
+            llm = ChatOllama(
+                model=graph_model,
+                temperature=0.0,
             )
-            documents = chunker.create_documents([text])
-            logger.info(f"[수집] 시맨틱 청킹 완료: {len(documents)}개 청크 생성")
+
+            # 1. 문장 단위로 분리
+            sentences = self._split_into_sentences(text)
+            if not sentences:
+                return [Document(page_content=text, metadata={})]
+
+            logger.info(f"[수집] 총 {len(sentences)}개 문장 추출")
+
+            # 2. 윈도우 단위로 LLM에게 분할점 결정 요청
+            # 한 번에 너무 많은 문장을 보내면 LLM 컨텍스트 초과 → 윈도우 처리
+            window_size = 30  # 한 번에 처리할 문장 수
+            all_chunks = []
+            current_buffer = []
+
+            i = 0
+            while i < len(sentences):
+                window = sentences[i:i + window_size]
+
+                # LLM에게 분할점 요청
+                split_indices = self._ask_llm_for_split_points(llm, window)
+
+                if not split_indices:
+                    # LLM이 분할점을 찾지 못하면 전체를 하나의 청크로
+                    current_buffer.extend(window)
+                    i += window_size
+                    continue
+
+                # 분할점에 따라 청크 생성
+                prev_idx = 0
+                for idx in sorted(split_indices):
+                    if idx <= prev_idx or idx > len(window):
+                        continue
+                    chunk_sentences = window[prev_idx:idx]
+                    if current_buffer:
+                        chunk_sentences = current_buffer + chunk_sentences
+                        current_buffer = []
+                    chunk_text = " ".join(chunk_sentences).strip()
+                    if chunk_text:
+                        all_chunks.append(chunk_text)
+                    prev_idx = idx
+
+                # 마지막 분할점 이후 남은 문장은 다음 윈도우로 이월
+                remaining = window[prev_idx:]
+                current_buffer.extend(remaining)
+
+                i += window_size
+
+            # 남은 버퍼 처리
+            if current_buffer:
+                chunk_text = " ".join(current_buffer).strip()
+                if chunk_text:
+                    all_chunks.append(chunk_text)
+
+            if not all_chunks:
+                all_chunks = [text]
+
+            documents = [Document(page_content=chunk, metadata={}) for chunk in all_chunks]
+            logger.info(f"[수집] LLM 시맨틱 청킹 완료: {len(documents)}개 청크 생성 (model={graph_model})")
             return documents
 
-        except ImportError:
-            logger.warning("[수집] langchain_experimental 미설치 - 고정 크기 청킹으로 폴백")
         except Exception as e:
-            logger.warning(f"[수집] 시맨틱 청킹 실패: {e} - 고정 크기 청킹으로 폴백")
+            logger.warning(f"[수집] LLM 시맨틱 청킹 실패: {e} - 고정 크기 청킹으로 폴백")
 
         # 폴백: 고정 크기 분할
         text_splitter = RecursiveCharacterTextSplitter(
@@ -624,6 +891,150 @@ class IngestionService:
             chunk_overlap=settings.RAG_CHUNK_OVERLAP,
         )
         return text_splitter.create_documents([text])
+
+    @staticmethod
+    def _split_into_sentences(text: str) -> List[str]:
+        """텍스트를 문장 단위로 분리"""
+        # 줄바꿈 기준 1차 분리 후, 마침표/물음표/느낌표로 2차 분리
+        lines = [line.strip() for line in text.split("\n") if line.strip()]
+        sentences = []
+        for line in lines:
+            # 문장 끝 패턴으로 분리 (한국어/영어 모두 지원)
+            parts = re.split(r'(?<=[.!?。])\s+', line)
+            for part in parts:
+                part = part.strip()
+                if part:
+                    sentences.append(part)
+        return sentences
+
+    def _ask_llm_for_split_points(
+        self,
+        llm,
+        sentences: List[str],
+    ) -> List[int]:
+        """
+        LLM에게 문장 리스트를 보여주고 의미적 분할점(인덱스)을 요청
+
+        Returns:
+            분할해야 할 문장 인덱스 리스트 (해당 인덱스 앞에서 분할)
+        """
+        if len(sentences) <= 3:
+            return []
+
+        # 번호가 매겨진 문장 목록 생성
+        numbered = "\n".join(f"[{i}] {s}" for i, s in enumerate(sentences))
+
+        prompt = (
+            "아래 번호가 매겨진 문장 목록을 읽고, 의미(주제)가 바뀌는 지점의 문장 번호를 찾아주세요.\n"
+            "각 청크는 하나의 완결된 주제나 개념을 담도록 분할해야 합니다.\n"
+            "너무 잘게 나누지 마세요. 하나의 주제가 여러 문장에 걸쳐 설명되면 그것은 하나의 청크입니다.\n\n"
+            f"문장 목록:\n{numbered}\n\n"
+            "응답 형식: 분할점 문장 번호만 쉼표로 구분하여 출력하세요.\n"
+            "예시: 5,12,18\n"
+            "분할할 필요가 없으면 '없음'이라고 답하세요.\n"
+            "번호 외의 다른 설명은 하지 마세요."
+        )
+
+        try:
+            response = llm.invoke(prompt)
+            content = response.content.strip()
+
+            if "없음" in content or not content:
+                return []
+
+            # 숫자만 추출
+            indices = []
+            for token in re.findall(r'\d+', content):
+                idx = int(token)
+                if 0 < idx < len(sentences):
+                    indices.append(idx)
+
+            logger.debug(f"[수집] LLM 분할점: {indices} (문장 {len(sentences)}개 중)")
+            return sorted(set(indices))
+
+        except Exception as e:
+            logger.warning(f"[수집] LLM 분할점 요청 실패: {e}")
+            return []
+
+    @staticmethod
+    def _parse_hwp(file_path: str) -> str:
+        """
+        HWP (한글) 파일에서 텍스트 추출
+
+        Strategy 1: pyhwp (hwp5) 라이브러리 사용
+        Strategy 2: LibreOffice CLI를 통한 변환 (폴백)
+        """
+        text = ""
+
+        # Strategy 1: pyhwp
+        try:
+            import hwp5.hwp5odt
+            from hwp5.proc import plaintext
+            import io
+
+            output = io.StringIO()
+            plaintext.main(file_path, output)
+            text = output.getvalue()
+            if text.strip():
+                logger.info(f"[수집] HWP 파싱 성공 (pyhwp): {len(text)}자")
+                return text
+        except ImportError:
+            logger.info("[수집] pyhwp 미설치 - LibreOffice 폴백 시도")
+        except Exception as e:
+            logger.warning(f"[수집] pyhwp 파싱 실패: {e}")
+
+        # Strategy 1b: pyhwp 대체 방법 (hwp5html 텍스트 추출)
+        try:
+            from hwp5.hwp5html import HTMLTransform
+            from hwp5.xmlmodel import Hwp5File
+            import io
+
+            hwp_file = Hwp5File(file_path)
+            # 본문 스트림에서 텍스트 추출
+            for section in hwp_file.bodytext:
+                stream = hwp_file.bodytext[section]
+                text += stream.read().decode("utf-16-le", errors="ignore")
+
+            if text.strip():
+                logger.info(f"[수집] HWP 파싱 성공 (hwp5 직접): {len(text)}자")
+                return text
+        except Exception as e:
+            logger.warning(f"[수집] hwp5 직접 파싱 실패: {e}")
+
+        # Strategy 2: LibreOffice CLI 변환
+        try:
+            import subprocess
+            import tempfile
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                result = subprocess.run(
+                    ["soffice", "--headless", "--convert-to", "txt:Text", "--outdir", tmpdir, file_path],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if result.returncode == 0:
+                    txt_files = list(Path(tmpdir).glob("*.txt"))
+                    if txt_files:
+                        text = txt_files[0].read_text(encoding="utf-8", errors="ignore")
+                        if text.strip():
+                            logger.info(f"[수집] HWP 파싱 성공 (LibreOffice): {len(text)}자")
+                            return text
+
+        except FileNotFoundError:
+            logger.warning("[수집] LibreOffice(soffice) 미설치 - HWP 변환 불가")
+        except subprocess.TimeoutExpired:
+            logger.warning("[수집] LibreOffice 변환 타임아웃 (60s)")
+        except Exception as e:
+            logger.warning(f"[수집] LibreOffice 변환 실패: {e}")
+
+        if not text.strip():
+            raise Exception(
+                "HWP 파일을 파싱할 수 없습니다. "
+                "다음 중 하나를 설치해주세요: "
+                "1) pip install pyhwp  "
+                "2) apt install libreoffice"
+            )
+
+        return text
 
     async def _add_clip_text_embeddings(
         self,
@@ -685,6 +1096,7 @@ class IngestionService:
         base_metadata: dict,
         kb_id: str,
         qdrant_client=None,
+        vision_model: Optional[str] = None,
     ):
         """
         이미지들을 CLIP으로 임베딩하여 Qdrant에 인덱싱
@@ -755,6 +1167,14 @@ class IngestionService:
             else:
                 thumbnails = [None] * len(image_paths)
 
+            # VLM (Ollama Vision) 으로 이미지 설명 생성 (캡셔닝보다 더 풍부한 설명)
+            vlm_descriptions = [""] * len(image_paths)
+            try:
+                vlm_descriptions = await self._generate_vlm_descriptions(image_paths, vision_model=vision_model)
+                logger.info(f"[수집] VLM 이미지 설명 생성 완료: {sum(1 for d in vlm_descriptions if d)}개 성공")
+            except Exception as e:
+                logger.warning(f"[수집] VLM 이미지 설명 생성 실패 (캡셔닝/OCR로 폴백): {e}")
+
             # Qdrant에 이미지 문서 추가
             collection_name = f"kb_{kb_id}"
             from app.services.vdb.qdrant_store import QdrantStore
@@ -774,8 +1194,8 @@ class IngestionService:
 
             # 이미지 메타데이터 생성
             image_docs = []
-            for path, clip_vec, caption, ocr_text, thumbnail in zip(
-                image_paths, clip_vectors, captions, ocr_texts, thumbnails
+            for path, clip_vec, caption, ocr_text, thumbnail, vlm_desc in zip(
+                image_paths, clip_vectors, captions, ocr_texts, thumbnails, vlm_descriptions
             ):
                 path_obj = Path(path)
 
@@ -801,6 +1221,8 @@ class IngestionService:
                     web_thumbnail_path = f"/images/{relative_thumb_path.as_posix()}"
 
                 # 메타데이터 구성
+                # VLM 설명이 있으면 caption에 VLM 설명 사용 (프론트엔드 표시용)
+                display_caption = vlm_desc if vlm_desc else (caption if caption else "")
                 metadata = {
                     **base_metadata,
                     "content_type": "image",
@@ -808,14 +1230,18 @@ class IngestionService:
                     "image_filename": path_obj.name,
                     "image_size": file_size,
                     "image_dimensions": f"{width}x{height}",
-                    "caption": caption if caption else "",  # BLIP 캡션
+                    "caption": display_caption,  # VLM 설명 우선, BLIP 캡션 폴백
+                    "blip_caption": caption if caption else "",  # 원본 BLIP 캡션 보존
+                    "vlm_description": vlm_desc if vlm_desc else "",  # VLM 설명 원본
                     "ocr_text": ocr_text if ocr_text else "",  # OCR 추출 텍스트
                     "thumbnail_path": web_thumbnail_path,  # Web URL 경로
                 }
 
-                # page_content는 캡션 + OCR 텍스트 + 파일명
+                # page_content: VLM 설명 > 캡션 + OCR 텍스트 > 파일명
                 content_parts = [f"[IMAGE: {path_obj.name}]"]
-                if caption:
+                if vlm_desc:
+                    content_parts.append(f"Description: {vlm_desc}")
+                elif caption:
                     content_parts.append(f"Description: {caption}")
                 if ocr_text:
                     content_parts.append(f"Text: {ocr_text}")
@@ -836,6 +1262,70 @@ class IngestionService:
         except Exception as e:
             logger.error(f"[수집] 이미지 인덱싱 실패: {e}", exc_info=True)
 
+    async def _generate_vlm_descriptions(self, image_paths: List[str], vision_model: Optional[str] = None) -> List[str]:
+        """
+        Ollama Vision 모델(llava 등)을 사용하여 이미지 설명 생성
+
+        BLIP 캡셔닝보다 더 풍부하고 정확한 설명을 생성합니다.
+        이미지에 포함된 텍스트도 함께 추출합니다.
+
+        Args:
+            image_paths: 이미지 파일 경로 리스트
+            vision_model: 유저 설정에서 선택한 VLM 모델 (None이면 settings.VISION_MODEL 사용)
+
+        Returns:
+            각 이미지에 대한 VLM 설명 리스트
+        """
+        import base64
+        import httpx
+
+        descriptions = []
+        vision_model = vision_model or settings.VISION_MODEL
+        logger.info(f"[수집] VLM 모델: {vision_model}")
+
+        prompt = (
+            "이 이미지를 자세히 분석해주세요. 다음 내용을 포함해서 설명해주세요:\n"
+            "1. 이미지에 보이는 주요 내용과 객체\n"
+            "2. 이미지에 포함된 모든 텍스트 (글자, 숫자, 기호 등)\n"
+            "3. 표나 차트가 있으면 그 내용\n"
+            "가능한 한 자세하게 한국어로 설명해주세요."
+        )
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            for path in image_paths:
+                try:
+                    # 이미지를 base64로 인코딩
+                    with open(path, "rb") as f:
+                        image_data = base64.b64encode(f.read()).decode("utf-8")
+
+                    # Ollama Vision API 호출
+                    response = await client.post(
+                        f"{settings.OLLAMA_BASE_URL}/api/generate",
+                        json={
+                            "model": vision_model,
+                            "prompt": prompt,
+                            "images": [image_data],
+                            "stream": False,
+                        },
+                        timeout=60.0,
+                    )
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        desc = data.get("response", "").strip()
+                        descriptions.append(desc)
+                        logger.info(f"[수집] VLM 설명 생성 완료: {Path(path).name} ({len(desc)}자)")
+                    else:
+                        body = response.text[:200] if response.text else "no body"
+                        logger.warning(f"[수집] VLM API 오류 ({response.status_code}): {Path(path).name} - {body}")
+                        descriptions.append("")
+
+                except Exception as e:
+                    logger.warning(f"[수집] VLM 설명 생성 실패 ({Path(path).name}): {e}", exc_info=True)
+                    descriptions.append("")
+
+        return descriptions
+
     async def _save_to_graph(self, splits: List[Document], base_metadata: dict):
         """
         그래프 DB에 저장 (Neo4j)
@@ -846,26 +1336,52 @@ class IngestionService:
         if not splits:
             return
 
+        # Neo4j 연결 확인
+        if not self.graph_service.ensure_connection():
+            logger.warning("[수집] Neo4j 미연결 - 그래프 저장 건너뜀")
+            return
+
+        # LLMGraphTransformer 사용 가능 확인
+        transformer = self.llm_transformer
+        if transformer is None:
+            logger.warning("[수집] LLMGraphTransformer 사용 불가 - 그래프 저장 건너뜀 "
+                           "(tool calling 미지원 모델이거나 LLM 연결 실패)")
+            return
+
         try:
             logger.info(f"[수집] 그래프 변환 시작: {len(splits)}개 청크...")
-            # CPU-bound 작업을 스레드풀에서 실행
+            # CPU-bound 작업을 스레드풀에서 실행 (LLM 호출 포함)
             loop = asyncio.get_running_loop()
-            graph_docs = await loop.run_in_executor(
-                None,
-                self.llm_transformer.convert_to_graph_documents,
-                splits
-            )
+            try:
+                graph_docs = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None,
+                        transformer.convert_to_graph_documents,
+                        splits
+                    ),
+                    timeout=120  # 2분 타임아웃
+                )
+            except asyncio.TimeoutError:
+                logger.error("[수집] 그래프 변환 타임아웃 (120s) - LLM 응답 없음")
+                return
+
+            if not graph_docs:
+                logger.warning("[수집] LLM이 엔티티를 추출하지 못함")
+                return
 
             for g in graph_docs:
                 g.source = Document(page_content="Source", metadata=base_metadata)
 
             kb_id = base_metadata.get("kb_id", "default")
             user_id = base_metadata.get("user_id", -1)
-            self.graph_service.add_graph_documents_with_metadata(graph_docs, kb_id, user_id)
-            logger.info(f"[수집] 그래프 DB 저장 완료: kb={kb_id}, user={user_id}")
+            result = self.graph_service.add_graph_documents_with_metadata(graph_docs, kb_id, user_id)
+            if result:
+                logger.info(f"[수집] 그래프 DB 저장 완료: kb={kb_id}, user={user_id}, docs={len(graph_docs)}")
+            else:
+                logger.error(f"[수집] 그래프 DB 저장 실패: kb={kb_id}, user={user_id}")
 
         except Exception as e:
-            logger.warning(f"[수집] 그래프 DB 저장 실패: {e}")
+            logger.error(f"[수집] 그래프 DB 저장 실패: {e}", exc_info=True)
 
     async def _cleanup_file(self, file_path: Path):
         """

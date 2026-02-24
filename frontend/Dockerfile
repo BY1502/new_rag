@@ -10,6 +10,7 @@ WORKDIR /app
 # 의존성 설치 (캐시 레이어)
 COPY package.json package-lock.json* ./
 RUN npm ci --production=false
+RUN npm i @rollup/rollup-linux-x64-musl --save-optional
 
 # 소스 복사 + 빌드
 COPY . .

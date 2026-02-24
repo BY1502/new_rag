@@ -18,7 +18,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 # PyTorch CUDA 버전 설치
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu121
+RUN pip install --no-cache-dir "torch>=2.6" torchvision --index-url https://download.pytorch.org/whl/cu124
 
 # 나머지 패키지 설치
 RUN pip install --no-cache-dir -r requirements.txt

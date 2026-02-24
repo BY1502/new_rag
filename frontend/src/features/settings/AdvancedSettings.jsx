@@ -583,6 +583,36 @@ export default function AdvancedSettings() {
                   <p className="text-sm text-gray-600 dark:text-gray-400 ml-10">
                     의미 검색 + 키워드 검색 융합 (RRF) — 가장 정확한 결과
                   </p>
+                  {/* 하이브리드 비율 슬라이더 */}
+                  {localConfig.searchMode === 'hybrid' && (
+                    <div className="mt-4 ml-10 p-4 bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-700 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Dense : Sparse 비율</label>
+                        <span className="text-xs font-mono bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
+                          {Math.round((localConfig.denseWeight || 0.5) * 100)}% : {Math.round((1 - (localConfig.denseWeight || 0.5)) * 100)}%
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">키워드</span>
+                        <input
+                          type="range"
+                          min="0" max="1" step="0.05"
+                          value={localConfig.denseWeight || 0.5}
+                          onChange={(e) => setLocalConfig({...localConfig, denseWeight: parseFloat(e.target.value)})}
+                          className="w-full h-2 bg-gradient-to-r from-green-400 via-blue-400 to-purple-400 rounded-lg appearance-none cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">의미</span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {(localConfig.denseWeight || 0.5) >= 0.7
+                          ? '의미 검색 중심: 문맥 이해가 중요한 질문에 유리'
+                          : (localConfig.denseWeight || 0.5) <= 0.3
+                            ? '키워드 검색 중심: 정확한 용어 매칭이 중요한 검색에 유리'
+                            : '균형 잡힌 검색: 의미와 키워드를 고르게 반영'}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Dense */}

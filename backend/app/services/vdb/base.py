@@ -44,14 +44,16 @@ class BaseVectorStore(ABC):
         self,
         top_k: int = 4,
         filters: Optional[Dict[str, Any]] = None,
-        search_method: str = "search"
+        search_method: str = "search",
+        alpha: float = 0.5,
     ) -> BaseRetriever:
         """LangChain BaseRetriever로 변환"""
         return VectorStoreRetrieverAdapter(
             store=self,
             top_k=top_k,
             filters=filters,
-            search_method=search_method
+            search_method=search_method,
+            alpha=alpha,
         )
 
 
@@ -62,6 +64,7 @@ class VectorStoreRetrieverAdapter(BaseRetriever):
     top_k: int = 4
     filters: Optional[Dict[str, Any]] = None
     search_method: str = "search"  # "search" | "hybrid_search" | "sparse_search"
+    alpha: float = 0.5  # Dense 가중치 (hybrid_search 시 사용)
 
     class Config:
         arbitrary_types_allowed = True
@@ -75,7 +78,7 @@ class VectorStoreRetrieverAdapter(BaseRetriever):
         """비동기 검색 (주 경로) - search_method에 따라 적절한 메서드 호출"""
         # 검색 메서드 선택
         if self.search_method == "hybrid_search" and hasattr(self.store, "hybrid_search"):
-            return await self.store.hybrid_search(query, top_k=self.top_k, filters=self.filters)
+            return await self.store.hybrid_search(query, top_k=self.top_k, alpha=self.alpha, filters=self.filters)
         elif self.search_method == "sparse_search" and hasattr(self.store, "sparse_search"):
             return await self.store.sparse_search(query, top_k=self.top_k, filters=self.filters)
         else:

@@ -33,6 +33,13 @@ async def add_columns():
         """)
         print("[OK] Added use_multimodal_search")
 
+        # dense_weight 컬럼 추가 (하이브리드 검색 시 Dense 비율)
+        await conn.execute("""
+            ALTER TABLE user_settings
+            ADD COLUMN IF NOT EXISTS dense_weight FLOAT DEFAULT 0.5
+        """)
+        print("[OK] Added dense_weight")
+
         print("\n2. Adding columns to knowledge_bases...")
 
         # external_service_id 컬럼 추가

@@ -65,7 +65,7 @@ services:
     image: neo4j:latest
     container_name: rag_neo4j
     environment:
-      NEO4J_AUTH: neo4j/password
+      NEO4J_AUTH: neo4j/password!@@
       NEO4J_PLUGINS: '["apoc"]'
     volumes:
       - neo4j_data:/data
@@ -73,7 +73,7 @@ services:
       - rag_network
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u neo4j -p password 'RETURN 1' || exit 1"]
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p 'password!@@' 'RETURN 1' || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -83,7 +83,8 @@ services:
   # 5. Backend (FastAPI)
   # ──────────────────────────────────────────────
   backend:
-    image: ${DOCKERHUB_USERNAME}/rag-backend:latest
+    build: ./backend
+    image: rag-backend:latest
     container_name: rag_backend
     env_file:
       - ./backend/.env.production
@@ -115,10 +116,11 @@ services:
   # 6. Frontend (React + Nginx)
   # ──────────────────────────────────────────────
   frontend:
-    image: ${DOCKERHUB_USERNAME}/rag-frontend:latest
+    build: ./frontend
+    image: rag-frontend:latest
     container_name: rag_frontend
     ports:
-      - "80:80"
+      - "48080:80"
     depends_on:
       - backend
     networks:

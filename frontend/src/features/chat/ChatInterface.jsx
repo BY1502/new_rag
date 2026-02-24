@@ -403,6 +403,7 @@ export default function ChatInterface() {
         use_rerank: config.useRerank || false,
         search_provider: config.activeSearchProviderId || null,
         search_mode: config.searchMode || 'hybrid',
+        dense_weight: config.denseWeight ?? 0.5,
         use_multimodal_search: config.useMultimodalSearch || false,
         images: imageBase64List,
         use_sql: useSql,

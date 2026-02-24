@@ -21,6 +21,7 @@ class UserSettings(Base):
     search_top_k = Column(Integer, default=5)
     use_rerank = Column(Boolean, default=True)
     search_mode = Column(String(20), default="hybrid")  # dense, sparse, hybrid
+    dense_weight = Column(Float, default=0.5)  # 하이브리드 검색 시 dense 비율 (0.0~1.0)
     use_multimodal_search = Column(Boolean, default=False)  # CLIP 멀티모달 검색
     system_prompt = Column(Text, nullable=True)
 

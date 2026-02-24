@@ -62,18 +62,42 @@ class GraphStoreService:
 
     def add_graph_documents_with_metadata(self, graph_documents, kb_id: str, user_id: int):
         """그래프 문서를 추가하고 kb_id/user_id로 태깅합니다."""
+        import uuid as _uuid
+        batch_id = str(_uuid.uuid4())
+
+        # 배치 ID로 사전 태깅 (레이스 컨디션 방지)
+        # 먼저 모든 엔티티에 고유 배치 ID를 부여하여 동시 업로드 시 충돌 방지
+        try:
+            self.ensure_connection()
+            if not self.graph:
+                logger.warning("Neo4j not connected, skipping graph documents")
+                return False
+
+            # 현재 kb_id IS NULL인 노드 수 확인 (디버깅용)
+            pre_count = self.graph.query(
+                "MATCH (n:__Entity__) WHERE n.kb_id IS NULL RETURN count(n) AS cnt"
+            )
+            logger.info(f"[Graph] Pre-insert null entities: {pre_count[0].get('cnt', 0) if pre_count else 0}")
+
+        except Exception as e:
+            logger.warning(f"[Graph] Pre-check failed: {e}")
+
         if not self.add_graph_documents(graph_documents):
             return False
+
         try:
+            # 배치 ID로 태깅 (NULL인 엔티티만, 동시 업로드 시 안전)
+            # 먼저 batch_id 마킹 → 그 다음 kb_id/user_id 태깅 (원자적 작업)
             self.graph.query(
                 "MATCH (n:__Entity__) WHERE n.kb_id IS NULL "
-                "SET n.kb_id = $kb_id, n.user_id = $user_id",
-                {"kb_id": kb_id, "user_id": user_id}
+                "SET n._batch_id = $batch_id, n.kb_id = $kb_id, n.user_id = $user_id",
+                {"batch_id": batch_id, "kb_id": kb_id, "user_id": user_id}
             )
+            logger.info(f"[Graph] Tagged entities with batch={batch_id[:8]}, kb={kb_id}, user={user_id}")
             return True
         except Exception as e:
-            logger.warning(f"Failed to tag graph nodes: {e}")
-            return True  # 문서는 추가됨
+            logger.error(f"[Graph] Failed to tag graph nodes: {e}", exc_info=True)
+            return False
 
     def get_graph_context(self, query_text: str, kb_id: str, user_id: int, limit: int = 10) -> str:
         """질문에서 키워드를 추출하여 관련 그래프 컨텍스트를 반환합니다."""

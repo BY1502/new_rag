@@ -54,12 +54,14 @@ class RetrieverFactory:
         top_k: int = 4,
         db: Optional[AsyncSession] = None,
         search_mode: str = "hybrid",
+        dense_weight: float = 0.5,
     ) -> BaseRetriever:
         """
         KB + 사용자 설정에 따른 Retriever 반환.
 
         Args:
             search_mode: "dense" (의미 검색), "sparse" (키워드 검색), "hybrid" (융합 검색)
+            dense_weight: 하이브리드 검색 시 Dense 비율 (0.0~1.0)
 
         Returns:
             단일 소스면 VectorStoreRetrieverAdapter,
@@ -112,10 +114,10 @@ class RetrieverFactory:
 
         # 1개면 단일 retriever, 2+개면 HybridRetriever
         if len(stores) == 1:
-            return stores[0].as_retriever(top_k=top_k, search_method=retriever_method)
+            return stores[0].as_retriever(top_k=top_k, search_method=retriever_method, alpha=dense_weight)
 
         logger.info(f"HybridRetriever with {len(stores)} sources for KB '{kb_id}' (mode: {search_mode})")
-        return HybridRetriever(stores=stores, top_k=top_k, search_mode=search_mode)
+        return HybridRetriever(stores=stores, top_k=top_k, search_mode=search_mode, dense_weight=dense_weight)
 
     async def _resolve_user_default_vdb(
         self,

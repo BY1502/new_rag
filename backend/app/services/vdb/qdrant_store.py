@@ -158,16 +158,16 @@ class QdrantStore(BaseVectorStore):
         self,
         query: str,
         top_k: int = 4,
-        alpha: float = 0.5,  # 사용 안 함 (Qdrant RRF 자동)
+        alpha: float = 0.5,
         filters: Optional[Dict[str, Any]] = None,
     ) -> List[Document]:
         """
-        Dense + Sparse 하이브리드 검색 (RRF fusion)
+        Dense + Sparse 가중 하이브리드 검색 (Weighted RRF fusion)
 
         Args:
             query: 검색 쿼리
             top_k: 반환할 문서 수
-            alpha: 미사용 (Qdrant 내부 RRF 사용)
+            alpha: Dense 가중치 (0.0=Sparse only, 1.0=Dense only, 0.5=균등)
             filters: 추가 필터 (미사용)
 
         Returns:
@@ -176,6 +176,14 @@ class QdrantStore(BaseVectorStore):
         from app.services.bm25_processor import get_bm25_processor
 
         try:
+            # 극단값: Dense only
+            if alpha >= 1.0:
+                return await self.search(query, top_k)
+
+            # 극단값: Sparse only
+            if alpha <= 0.0:
+                return await self.sparse_search(query, top_k)
+
             # 0. 컬렉션에 sparse vector가 없으면 dense-only로 폴백
             if not self._has_sparse_vectors():
                 logger.info(f"Collection {self.collection_name} has no sparse vectors, using dense search")
@@ -189,56 +197,74 @@ class QdrantStore(BaseVectorStore):
             vocab = await self._load_vocabulary()
 
             if not vocab:
-                # 어휘가 없으면 dense-only로 폴백
                 logger.warning(f"No vocabulary for {self.collection_name}, falling back to dense search")
                 return await self.search(query, top_k)
 
             sparse_vector = bm25.compute_sparse_vector(query, vocab)
 
             if not sparse_vector:
-                # Sparse vector 생성 실패 시 dense-only
                 logger.warning("Failed to compute sparse vector, falling back to dense search")
                 return await self.search(query, top_k)
 
-            # 3. Qdrant hybrid query (RRF fusion)
+            # 3. 개별 검색 (Dense + Sparse)
             user_filter = self._build_user_filter()
+            oversample = top_k * 3
 
-            results = self.client.query_points(
+            dense_results = self.client.query_points(
                 collection_name=self.collection_name,
                 query=query_embedding,
                 using="dense",
                 query_filter=user_filter,
-                limit=top_k,
+                limit=oversample,
                 with_payload=True,
                 with_vectors=False,
-                # Sparse vector prefetch
-                prefetch=[
-                    models.Prefetch(
-                        query=models.SparseVector(
-                            indices=list(sparse_vector.keys()),
-                            values=list(sparse_vector.values())
-                        ),
-                        using="text-sparse",
-                        limit=top_k * 3,  # Oversampling
-                    )
-                ],
-                score_threshold=0.0,
             )
 
-            # 4. Document 객체로 변환
+            sparse_results = self.client.query_points(
+                collection_name=self.collection_name,
+                query=models.SparseVector(
+                    indices=list(sparse_vector.keys()),
+                    values=list(sparse_vector.values()),
+                ),
+                using="text-sparse",
+                query_filter=user_filter,
+                limit=oversample,
+                with_payload=True,
+                with_vectors=False,
+            )
+
+            # 4. Weighted RRF (Reciprocal Rank Fusion)
+            RRF_K = 60  # 표준 RRF 상수
+            score_map: Dict[str, Dict[str, Any]] = {}
+
+            for rank, point in enumerate(dense_results.points):
+                pid = str(point.id)
+                rrf_score = alpha * (1.0 / (RRF_K + rank))
+                score_map[pid] = {"score": rrf_score, "payload": point.payload}
+
+            for rank, point in enumerate(sparse_results.points):
+                pid = str(point.id)
+                rrf_score = (1.0 - alpha) * (1.0 / (RRF_K + rank))
+                if pid in score_map:
+                    score_map[pid]["score"] += rrf_score
+                else:
+                    score_map[pid] = {"score": rrf_score, "payload": point.payload}
+
+            # 5. 점수 내림차순 정렬 → top_k
+            sorted_items = sorted(score_map.values(), key=lambda x: x["score"], reverse=True)[:top_k]
+
             docs = []
-            for point in results.points:
+            for item in sorted_items:
                 docs.append(Document(
-                    page_content=point.payload.get("page_content", ""),
-                    metadata=point.payload.get("metadata", {})
+                    page_content=item["payload"].get("page_content", ""),
+                    metadata=item["payload"].get("metadata", {}),
                 ))
 
-            logger.debug(f"Hybrid search returned {len(docs)} documents")
+            logger.debug(f"Hybrid search (alpha={alpha}) returned {len(docs)} documents")
             return docs
 
         except Exception as e:
             logger.error(f"Hybrid search failed: {e}, falling back to dense search")
-            # Graceful fallback to dense-only
             return await self.search(query, top_k)
 
     async def sparse_search(

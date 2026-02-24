@@ -25,6 +25,7 @@ class HybridRetriever(BaseRetriever):
     stores: List[Any]  # List[BaseVectorStore]
     top_k: int = 4
     search_mode: str = "hybrid"  # "dense" | "sparse" | "hybrid"
+    dense_weight: float = 0.5  # 하이브리드 검색 시 Dense 가중치
 
     class Config:
         arbitrary_types_allowed = True
@@ -39,7 +40,7 @@ class HybridRetriever(BaseRetriever):
         tasks = []
         for store in self.stores:
             if self.search_mode == "hybrid" and hasattr(store, "hybrid_search"):
-                tasks.append(store.hybrid_search(query, top_k=self.top_k))
+                tasks.append(store.hybrid_search(query, top_k=self.top_k, alpha=self.dense_weight))
             elif self.search_mode == "sparse" and hasattr(store, "sparse_search"):
                 tasks.append(store.sparse_search(query, top_k=self.top_k))
             else:

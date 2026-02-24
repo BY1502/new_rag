@@ -31,7 +31,9 @@
       "Bash(ollama list:*)",
       "Bash(uvicorn app.main:app --reload:*)",
       "Bash(taskkill:*)",
-      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0X2RlYnVnQHRlc3QuY29tIiwiZXhwIjoxNzcxMDMyNDIwLCJpYXQiOjE3NzA5NDYwMjB9.AG5ba79nqiLmo4Slen2EIV6g9MRcVJAvl3rZcZjLMVI\")"
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0X2RlYnVnQHRlc3QuY29tIiwiZXhwIjoxNzcxMDMyNDIwLCJpYXQiOjE3NzA5NDYwMjB9.AG5ba79nqiLmo4Slen2EIV6g9MRcVJAvl3rZcZjLMVI\")",
+      "WebFetch(domain:docling-project.github.io)",
+      "Bash(ls:*)"
     ]
   }
 }

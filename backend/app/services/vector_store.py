@@ -21,7 +21,6 @@ class VectorStoreService:
     def __init__(self):
         if VectorStoreService._initialized:
             return
-        VectorStoreService._initialized = True
 
         # 디바이스 감지
         device = "cpu"
@@ -45,6 +44,7 @@ class VectorStoreService:
             logger.warning(f"Failed to get embedding dimension: {e}")
             self.embedding_dimension = 1024
 
+        VectorStoreService._initialized = True
         logger.info(f"VectorStoreService initialized (singleton) - device: {device}")
 
     def get_client(self, qdrant_client: "QdrantClient | None" = None) -> QdrantClient:

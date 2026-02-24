@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     # 파일 업로드 설정
     # ============================================================
     MAX_UPLOAD_SIZE_MB: int = Field(default=50, ge=1, le=500)
-    ALLOWED_FILE_EXTENSIONS: str = ".pdf,.docx,.doc,.txt,.md,.pptx,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
+    ALLOWED_FILE_EXTENSIONS: str = ".pdf,.docx,.doc,.txt,.md,.pptx,.xlsx,.hwp,.hwpx,.jpg,.jpeg,.png,.gif,.webp"
 
     @property
     def allowed_extensions_list(self) -> List[str]:

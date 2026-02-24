@@ -23,7 +23,9 @@ from app.schemas.knowledge_base import (
 from app.crud.knowledge_base import (
     list_knowledge_bases, get_knowledge_base, create_knowledge_base,
     update_knowledge_base, delete_knowledge_base as crud_delete_kb,
+    create_knowledge_file, get_files_for_kb,
 )
+from app.crud.user_settings import get_user_settings
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +191,10 @@ async def upload_file(
     chunking_method = (kb.chunking_method if kb else "fixed") or "fixed"
     semantic_threshold = (kb.semantic_threshold if kb else 0.75) or 0.75
 
+    # 유저 설정에서 VLM 모델 조회
+    user_settings = await get_user_settings(db, current_user.id)
+    vision_model = user_settings.vlm_model if user_settings and user_settings.vlm_model else None
+
     # background task 전에 외부 client resolve (db session이 유효한 동안)
     ext_client = await resolve_qdrant_client(db, current_user.id, kb_id)
 
@@ -196,6 +202,22 @@ async def upload_file(
         file_path, original_filename = await ingestion_service.save_file(file, kb_id, current_user.id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"파일 저장 실패: {str(e)}")
+
+    # KnowledgeFile 레코드 생성 (status=processing) - 파일 업로드 즉시 조회 가능
+    file_record_id = None
+    if kb:
+        try:
+            file_size = file.size if hasattr(file, 'size') and file.size else 0
+            kf = await create_knowledge_file(
+                db, kb.id,
+                filename=os.path.basename(file_path),
+                original_filename=original_filename,
+                file_size_bytes=file_size,
+            )
+            file_record_id = kf.id
+            logger.info(f"KnowledgeFile record created: id={kf.id}, status=processing")
+        except Exception as e:
+            logger.warning(f"KnowledgeFile 레코드 생성 실패 (무시): {e}")
 
     background_tasks.add_task(
         ingestion_service.process_file_background,
@@ -208,6 +230,8 @@ async def upload_file(
         chunking_method=chunking_method,
         semantic_threshold=semantic_threshold,
         qdrant_client=ext_client,
+        file_record_id=file_record_id,
+        vision_model=vision_model,
     )
 
     return {
@@ -279,13 +303,16 @@ async def get_files_list(
             break
 
     files = []
+    qdrant_sources = set()
     for source, data in sorted(file_data.items(), key=lambda x: x[0]):
         filename = source.rsplit("/", 1)[-1].rsplit("\\", 1)[-1] if source else "unknown"
+        qdrant_sources.add(source)
         file_info = {
             "source": source,
             "filename": filename,
             "chunk_count": data["count"],
             "type": data["content_type"],
+            "status": "completed",
         }
 
         # 이미지 파일인 경우 썸네일 경로 추가
@@ -300,6 +327,24 @@ async def get_files_list(
                 file_info["image_dimensions"] = data["image_dimensions"]
 
         files.append(file_info)
+
+    # PostgreSQL에서 처리 중/에러 상태 파일도 포함 (Qdrant에 아직 없는 파일)
+    kb_row = await get_knowledge_base(db, current_user.id, kb_id)
+    if kb_row:
+        try:
+            db_files = await get_files_for_kb(db, kb_row.id)
+            for kf in db_files:
+                if kf.original_filename not in qdrant_sources and kf.status in ("processing", "error"):
+                    files.append({
+                        "source": kf.original_filename,
+                        "filename": kf.original_filename,
+                        "chunk_count": kf.chunk_count or 0,
+                        "type": "text",
+                        "status": kf.status,
+                        "error_message": kf.error_message,
+                    })
+        except Exception as e:
+            logger.warning(f"DB 파일 목록 조회 실패 (무시): {e}")
 
     return {"files": files, "kb_id": kb_id}
 
@@ -404,11 +449,12 @@ async def get_chunks(
     chunks = []
 
     if search and search.strip():
-        # 시맨틱 검색
+        # 시맨틱 검색 (named vector "dense" 사용)
         query_vector = vector_service.embeddings.embed_query(search)
         results = client.query_points(
             collection_name=collection_name,
             query=query_vector,
+            using="dense",
             query_filter=user_filter,
             limit=limit,
             with_payload=True,

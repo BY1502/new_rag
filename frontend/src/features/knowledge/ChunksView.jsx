@@ -241,8 +241,8 @@ export default function ChunksView({ kbId }) {
                 const isImage = chunk.content_type === 'image';
                 const preview = chunk.text.length > 200 ? chunk.text.slice(0, 200) + '...' : chunk.text;
                 const fileName = chunk.source ? chunk.source.split('/').pop().split('\\').pop() : 'unknown';
-                const thumbnailUrl = chunk.thumbnail_path ? `http://localhost:8000${chunk.thumbnail_path}` : null;
-                const fullImageUrl = chunk.image_path ? `http://localhost:8000${chunk.image_path}` : null;
+                const thumbnailUrl = chunk.thumbnail_path || null;
+                const fullImageUrl = chunk.image_path || null;
 
                 return (
                   <div

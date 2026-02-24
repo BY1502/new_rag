@@ -11,6 +11,7 @@ class UserSettingsResponse(BaseModel):
     search_top_k: int
     use_rerank: bool
     search_mode: str
+    dense_weight: float = 0.5
     use_multimodal_search: bool
     system_prompt: Optional[str] = None
     theme: str
@@ -31,6 +32,7 @@ class UserSettingsUpdate(BaseModel):
     search_top_k: Optional[int] = Field(None, ge=1, le=20)
     use_rerank: Optional[bool] = None
     search_mode: Optional[str] = Field(None, pattern=r"^(dense|sparse|hybrid)$")
+    dense_weight: Optional[float] = Field(None, ge=0.0, le=1.0)
     use_multimodal_search: Optional[bool] = None
     system_prompt: Optional[str] = Field(None, max_length=5000)
     theme: Optional[str] = Field(None, pattern=r"^(Light|Dark)$")

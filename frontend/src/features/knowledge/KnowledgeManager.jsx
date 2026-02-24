@@ -348,7 +348,7 @@ export default function KnowledgeManager() {
                 <div className="grid grid-cols-1 gap-2">
                   {currentFiles.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).map((file, idx) => {
                     const isImage = file.type === 'image' || /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
-                    const thumbnailUrl = file.thumbnail_path ? `http://localhost:8000${file.thumbnail_path}` : null;
+                    const thumbnailUrl = file.thumbnail_path || null;
 
                     return (
                     <div key={file.id} className={`group flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md hover:border-gray-300 hover-lift transition-all animate-slideUp animate-stagger-${Math.min(idx % 4 + 1, 4)}`}>
