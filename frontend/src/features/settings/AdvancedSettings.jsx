@@ -217,7 +217,7 @@ export default function AdvancedSettings() {
     { id: 'model', label: '모델 관리', icon: Cpu },
     { id: 'graph', label: 'Graph DB', icon: Share2 },
     { id: 'cache', label: '메모리 / 캐시', icon: Zap }, // ✅ Redis 탭 추가
-    { id: 'search', label: '웹 검색', icon: Globe },
+    { id: 'search', label: '검색 설정', icon: Globe },
     { id: 'api', label: 'API 키 관리', icon: Key },
     { id: 'database', label: '데이터베이스', icon: Database },
     { id: 'mcp', label: 'MCP 서버', icon: Plug },
@@ -511,42 +511,11 @@ export default function AdvancedSettings() {
           )}
 
           {activeTab === 'search' && <div className="space-y-8 max-w-2xl">
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-900 dark:text-blue-300 flex gap-3">
-              <BookOpen size={24} className="shrink-0 text-blue-600 dark:text-blue-400 mt-1"/>
-              <div><h4 className="font-bold">웹 검색 공급자</h4><p className="text-xs text-blue-800/80 dark:text-blue-400/80 mt-1 leading-relaxed">채팅에서 웹 검색 사용 시 적용됩니다. DuckDuckGo는 바로 사용 가능하며,<br/>나머지는 API 키 등록 후 사용할 수 있습니다 (모두 무료 티어 제공).</p></div>
+            {/* RAG 검색 설정 */}
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl p-4 text-sm text-indigo-900 dark:text-indigo-300 flex gap-3">
+              <BookOpen size={24} className="shrink-0 text-indigo-600 dark:text-indigo-400 mt-1"/>
+              <div><h4 className="font-bold">RAG 검색 설정</h4><p className="text-xs text-indigo-800/80 dark:text-indigo-400/80 mt-1 leading-relaxed">지식베이스 문서를 검색하는 방식을 설정합니다.<br/>검색 모드, 결과 개수, 멀티모달 옵션을 조정할 수 있습니다.</p></div>
             </div>
-            <section>
-              <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 mb-3">검색 공급자 선택</label>
-              <div className="grid grid-cols-2 gap-3">
-                {searchProviders.map(p => {
-                  const hasKey = !p.needsKey || backendApiKeys.some(bk => bk.provider === p.id);
-                  const isActive = localConfig.activeSearchProviderId === p.id;
-                  return (
-                    <div key={p.id} onClick={() => setLocalConfig({...localConfig, activeSearchProviderId: p.id})} className={`relative p-4 rounded-xl cursor-pointer border-2 transition-all ${isActive ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/30 shadow-sm' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
-                      <div className="flex items-center gap-3">
-                        <Globe className={isActive ? "text-blue-600 shrink-0" : "text-gray-400 shrink-0"} size={20}/>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className={`font-bold text-sm ${isActive ? 'text-blue-900 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>{p.name}</span>
-                            {!p.needsKey && <span className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded font-bold">FREE</span>}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{p.description}</div>
-                          {p.needsKey && (
-                            <div className="mt-1.5">
-                              {hasKey
-                                ? <span className="text-[10px] text-green-600 dark:text-green-400 flex items-center gap-1"><CheckCircle size={10}/> API 키 등록됨</span>
-                                : <span className="text-[10px] text-orange-500 dark:text-orange-400 flex items-center gap-1"><Key size={10}/> API 키 필요 (API 키 관리 탭)</span>
-                              }
-                            </div>
-                          )}
-                        </div>
-                        {isActive && <CheckCircle size={18} className="text-blue-600 shrink-0"/>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
             <section>
               <div className="flex justify-between items-center mb-2">
                 <label className="text-sm font-bold text-gray-800 dark:text-gray-200">검색 결과 개수 (Top K)</label>
@@ -699,6 +668,46 @@ export default function AdvancedSettings() {
               <div className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-gray-800 font-mono text-gray-600 dark:text-gray-400">{backendConfig?.qdrant_url || (backendLoading ? '로딩 중...' : 'http://localhost:6333')}</div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 flex items-center gap-1"><Info size={12}/> 변경하려면 백엔드 .env의 QDRANT_URL을 수정하세요.</p>
             </section>
+
+            {/* 웹 검색 공급자 */}
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-900 dark:text-blue-300 flex gap-3 mb-6">
+                <BookOpen size={24} className="shrink-0 text-blue-600 dark:text-blue-400 mt-1"/>
+                <div><h4 className="font-bold">웹 검색 공급자</h4><p className="text-xs text-blue-800/80 dark:text-blue-400/80 mt-1 leading-relaxed">채팅에서 웹 검색 사용 시 적용됩니다. DuckDuckGo는 바로 사용 가능하며,<br/>나머지는 API 키 등록 후 사용할 수 있습니다 (모두 무료 티어 제공).</p></div>
+              </div>
+              <section>
+                <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 mb-3">검색 공급자 선택</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {searchProviders.map(p => {
+                    const hasKey = !p.needsKey || backendApiKeys.some(bk => bk.provider === p.id);
+                    const isActive = localConfig.activeSearchProviderId === p.id;
+                    return (
+                      <div key={p.id} onClick={() => setLocalConfig({...localConfig, activeSearchProviderId: p.id})} className={`relative p-4 rounded-xl cursor-pointer border-2 transition-all ${isActive ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/30 shadow-sm' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+                        <div className="flex items-center gap-3">
+                          <Globe className={isActive ? "text-blue-600 shrink-0" : "text-gray-400 shrink-0"} size={20}/>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-bold text-sm ${isActive ? 'text-blue-900 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>{p.name}</span>
+                              {!p.needsKey && <span className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded font-bold">FREE</span>}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{p.description}</div>
+                            {p.needsKey && (
+                              <div className="mt-1.5">
+                                {hasKey
+                                  ? <span className="text-[10px] text-green-600 dark:text-green-400 flex items-center gap-1"><CheckCircle size={10}/> API 키 등록됨</span>
+                                  : <span className="text-[10px] text-orange-500 dark:text-orange-400 flex items-center gap-1"><Key size={10}/> API 키 필요 (API 키 관리 탭)</span>
+                                }
+                              </div>
+                            )}
+                          </div>
+                          {isActive && <CheckCircle size={18} className="text-blue-600 shrink-0"/>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
           </div>}
 
           {activeTab === 'api' && <div className="space-y-8 max-w-2xl">
