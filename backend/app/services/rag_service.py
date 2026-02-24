@@ -728,7 +728,15 @@ class RAGService:
         return context_text
 
     def _rerank_documents(self, query: str, docs: list, top_k: int) -> list:
-        """임베딩 유사도 기반으로 문서 재정렬"""
+        """Cross-Encoder 기반 문서 리랭킹 (폴백: 임베딩 유사도)"""
+        from app.services.reranker import get_reranker_service
+
+        reranker = get_reranker_service()
+        if reranker.is_available:
+            return reranker.rerank(query, docs, top_k)
+
+        # Cross-Encoder 사용 불가 시 임베딩 유사도 폴백
+        logger.debug("Cross-Encoder 미사용 — 임베딩 유사도 기반 리랭킹")
         query_embedding = np.array(
             self.vector_service.embeddings.embed_query(query)
         )
@@ -737,15 +745,11 @@ class RAGService:
             self.vector_service.embeddings.embed_documents(doc_texts)
         )
 
-        # 코사인 유사도 계산
         query_norm = np.linalg.norm(query_embedding)
         doc_norms = np.linalg.norm(doc_embeddings, axis=1)
-
-        # 0으로 나누기 방지
         safe_norms = np.where(doc_norms == 0, 1, doc_norms)
         scores = doc_embeddings @ query_embedding / (safe_norms * query_norm)
 
-        # 점수 기준 내림차순 정렬
         ranked_indices = np.argsort(scores)[::-1][:top_k]
         return [docs[i] for i in ranked_indices]
 

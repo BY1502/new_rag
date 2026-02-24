@@ -158,6 +158,10 @@ class Settings(BaseSettings):
     RAG_TOP_K: int = Field(default=5, ge=1, le=20, description="검색 결과 개수")
     RAG_CHUNK_SIZE: int = Field(default=500, ge=100, le=4000, description="청크 크기")
     RAG_CHUNK_OVERLAP: int = Field(default=50, ge=0, le=500, description="청크 오버랩")
+    RERANKER_MODEL: str = Field(
+        default="BAAI/bge-reranker-v2-m3",
+        description="Cross-Encoder 리랭커 모델명"
+    )
 
     # ============================================================
     # 이미지 저장 설정
