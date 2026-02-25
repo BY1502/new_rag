@@ -855,6 +855,23 @@ export const settingsAPI = {
       return { tables: [], error: error.message };
     }
   },
+
+  updateDbMetadata: async (connId, metadata) => {
+    try {
+      const response = await fetchWithTimeout(
+        `${API_BASE_URL}/settings/db-connections/${encodeURIComponent(connId)}/metadata`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", ...getAuthHeader() },
+          body: JSON.stringify({ schema_metadata: metadata }),
+        },
+      );
+      if (!response.ok) throw new Error("메타데이터 저장 실패");
+      return await response.json();
+    } catch (error) {
+      return { error: error.message };
+    }
+  },
 };
 
 /**

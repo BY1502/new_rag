@@ -55,7 +55,7 @@ export default function HomeDashboard() {
           <div className="flex items-end justify-between mb-8">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                {greeting}, <span className="text-blue-600">{userName}</span>
+                {greeting}, <span className="text-gray-600">{userName}</span>
               </h1>
               <p className="text-base text-gray-600 mt-2">
                 RAG AI 워크스페이스에서 오늘도 좋은 하루 되세요.
@@ -63,7 +63,7 @@ export default function HomeDashboard() {
             </div>
             <button
               onClick={handleNewChat}
-              className="ripple-container flex items-center gap-2.5 px-6 py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-sm font-semibold rounded-lg shadow-sm hover:shadow-md transition-all"
+              className="ripple-container flex items-center gap-2.5 px-6 py-3 bg-green-500 hover:bg-green-600 active:scale-95 text-white text-sm font-semibold rounded-lg shadow-sm hover:shadow-md transition-all"
             >
               <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" /> 새 대화
             </button>
@@ -73,14 +73,14 @@ export default function HomeDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <button
               onClick={handleNewChat}
-              className="group relative p-7 bg-white rounded-lg text-left border border-gray-200 hover:border-blue-400 hover-lift animate-slideUp animate-stagger-1"
+              className="group relative p-7 bg-white rounded-lg text-left border border-gray-200 hover:border-gray-400 hover-lift animate-slideUp animate-stagger-1"
             >
-              <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+              <div className="w-12 h-12 bg-gray-50 text-gray-600 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
                 <MessageSquare size={24} className="group-hover:rotate-6 transition-transform" />
               </div>
               <div className="font-bold text-lg text-gray-900">RAG 대화 시작</div>
               <div className="text-sm text-gray-600 mt-1.5 leading-relaxed">지식 베이스를 기반으로 AI와 대화하세요</div>
-              <ArrowRight size={16} className="absolute bottom-6 right-6 text-gray-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
+              <ArrowRight size={16} className="absolute bottom-6 right-6 text-gray-300 group-hover:text-gray-500 group-hover:translate-x-1 transition-all" />
             </button>
 
             <button
@@ -97,14 +97,14 @@ export default function HomeDashboard() {
 
             <button
               onClick={() => navigate('/agent')}
-              className="group relative p-7 bg-white rounded-lg text-left border border-gray-200 hover:border-blue-400 hover-lift animate-slideUp animate-stagger-3"
+              className="group relative p-7 bg-white rounded-lg text-left border border-gray-200 hover:border-gray-400 hover-lift animate-slideUp animate-stagger-3"
             >
-              <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+              <div className="w-12 h-12 bg-gray-50 text-gray-600 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
                 <Bot size={24} className="group-hover:rotate-6 transition-transform" />
               </div>
               <div className="font-bold text-lg text-gray-900">에이전트 관리</div>
               <div className="text-sm text-gray-600 mt-1.5 leading-relaxed">AI 페르소나 생성 및 커스터마이즈</div>
-              <ArrowRight size={16} className="absolute bottom-6 right-6 text-gray-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
+              <ArrowRight size={16} className="absolute bottom-6 right-6 text-gray-300 group-hover:text-gray-500 group-hover:translate-x-1 transition-all" />
             </button>
           </div>
         </section>
@@ -114,9 +114,9 @@ export default function HomeDashboard() {
           {/* 통계 카드 (왼쪽 2/3) */}
           <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { label: '에이전트', value: agents.length, icon: Bot, color: 'text-blue-600', bg: 'bg-blue-50' },
+              { label: '에이전트', value: agents.length, icon: Bot, color: 'text-gray-600', bg: 'bg-gray-50' },
               { label: '지식 베이스', value: knowledgeBases.length, icon: Database, color: 'text-purple-600', bg: 'bg-purple-50' },
-              { label: '문서', value: totalFiles, icon: BookOpen, color: 'text-green-600', bg: 'bg-green-50' },
+              { label: '문서', value: totalFiles, icon: BookOpen, color: 'text-green-500', bg: 'bg-green-50' },
               { label: '대화', value: sessions.length, icon: MessageSquare, color: 'text-orange-600', bg: 'bg-orange-50' },
             ].map((stat, idx) => (
               <div
@@ -138,7 +138,7 @@ export default function HomeDashboard() {
               <h4 className="text-sm font-bold text-gray-600 uppercase tracking-wider">시스템 상태</h4>
               {!serviceLoading && (
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full animate-scaleIn ${
-                  connectedCount === 4 ? 'bg-green-50 text-green-700' :
+                  connectedCount === 4 ? 'bg-green-50 text-green-600' :
                   connectedCount >= 2 ? 'bg-yellow-50 text-yellow-700' :
                   'bg-red-50 text-red-700'
                 }`}>
@@ -156,10 +156,10 @@ export default function HomeDashboard() {
                 <div key={svc.key} className={`flex items-center gap-3.5 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-all cursor-pointer animate-slideUp animate-stagger-${idx + 1}`}>
                   <div className={`relative w-2.5 h-2.5 rounded-full shrink-0 ${
                     serviceLoading ? 'bg-gray-300 animate-pulse' :
-                    serviceStatus[svc.key] ? 'bg-green-500' : 'bg-red-400'
+                    serviceStatus[svc.key] ? 'bg-green-400' : 'bg-red-400'
                   }`}>
                     {!serviceLoading && serviceStatus[svc.key] && (
-                      <span className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-30" />
+                      <span className="absolute inset-0 rounded-full bg-green-400 animate-ping opacity-30" />
                     )}
                   </div>
                   <svc.icon size={16} className="text-gray-500 shrink-0 hover:scale-110 transition-transform" />
@@ -168,7 +168,7 @@ export default function HomeDashboard() {
                     <span className="text-xs text-gray-500 ml-2">{svc.desc}</span>
                   </div>
                   {!serviceLoading && (
-                    <span className={`text-xs font-semibold transition-colors ${serviceStatus[svc.key] ? 'text-green-600' : 'text-red-500'}`}>
+                    <span className={`text-xs font-semibold transition-colors ${serviceStatus[svc.key] ? 'text-green-500' : 'text-red-500'}`}>
                       {serviceStatus[svc.key] ? 'ON' : 'OFF'}
                     </span>
                   )}
@@ -180,10 +180,10 @@ export default function HomeDashboard() {
 
         {/* 3. 시작 가이드 (처음 사용자용) */}
         {(totalFiles === 0 || sessions.length <= 1) && (
-          <section className="bg-blue-600 rounded-lg p-8 text-white animate-slideUp">
+          <section className="bg-green-500 rounded-lg p-8 text-white animate-slideUp">
             <div className="flex items-center gap-2.5 mb-2">
               <BookOpen size={18} className="animate-float" />
-              <span className="text-sm font-semibold text-blue-100 uppercase tracking-wider">시작 가이드</span>
+              <span className="text-sm font-semibold text-gray-100 uppercase tracking-wider">시작 가이드</span>
             </div>
             <h3 className="text-xl font-bold mb-5">3단계로 RAG AI를 시작하세요</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -195,18 +195,18 @@ export default function HomeDashboard() {
                 <button
                   key={item.step}
                   onClick={() => item.action ? item.action() : navigate(item.path)}
-                  className={`bg-blue-500 hover:bg-blue-400 active:scale-95 rounded-lg p-5 text-left transition-all group hover-lift animate-scaleIn animate-stagger-${idx + 1}`}
+                  className={`bg-white/20 hover:bg-white/30 active:scale-95 rounded-lg p-5 text-left transition-all group hover-lift animate-scaleIn animate-stagger-${idx + 1}`}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <span className={`w-7 h-7 rounded-full text-sm font-bold flex items-center justify-center transition-all group-hover:scale-110 ${
-                      item.done ? 'bg-green-400 text-green-900' : 'bg-blue-400 text-blue-900'
+                      item.done ? 'bg-white text-green-600' : 'bg-white/40 text-white'
                     }`}>
                       {item.done ? <CheckCircle size={16} /> : item.step}
                     </span>
-                    <ArrowRight size={16} className="text-blue-200 group-hover:translate-x-2 transition-transform" />
+                    <ArrowRight size={16} className="text-gray-200 group-hover:translate-x-2 transition-transform" />
                   </div>
                   <div className="font-bold text-base">{item.title}</div>
-                  <div className="text-sm text-blue-100 mt-1.5">{item.desc}</div>
+                  <div className="text-sm text-gray-100 mt-1.5">{item.desc}</div>
                 </button>
               ))}
             </div>
@@ -222,7 +222,7 @@ export default function HomeDashboard() {
                 <MessageSquare size={18} className="text-gray-500" /> 최근 대화
               </h3>
               {sessions.length > 5 && (
-                <button onClick={() => navigate('/chat')} className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 transition-all hover:gap-2">
+                <button onClick={() => navigate('/chat')} className="text-sm text-gray-600 hover:text-gray-700 font-semibold flex items-center gap-1 transition-all hover:gap-2">
                   모두 보기 <ChevronRight size={14} />
                 </button>
               )}
@@ -232,7 +232,7 @@ export default function HomeDashboard() {
                 <div className="py-16 text-center">
                   <MessageSquare size={36} className="mx-auto mb-3 text-gray-300 animate-float" />
                   <p className="text-base text-gray-500">아직 대화가 없습니다</p>
-                  <button onClick={handleNewChat} className="mt-4 text-sm text-blue-600 hover:text-blue-700 font-semibold transition-all hover:scale-105">
+                  <button onClick={handleNewChat} className="mt-4 text-sm text-gray-600 hover:text-gray-700 font-semibold transition-all hover:scale-105">
                     첫 대화 시작하기 →
                   </button>
                 </div>
@@ -244,18 +244,18 @@ export default function HomeDashboard() {
                       onClick={() => { setCurrentSessionId(session.id); navigate('/chat'); }}
                       className={`w-full px-5 py-4 hover:bg-gray-50 flex items-center gap-4 transition-all text-left group animate-slideUp animate-stagger-${Math.min(idx + 1, 4)}`}
                     >
-                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-600 group-hover:scale-110 transition-all shrink-0">
+                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500 group-hover:bg-gray-50 group-hover:text-gray-600 group-hover:scale-110 transition-all shrink-0">
                         <MessageSquare size={18} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-[15px] font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors">
+                        <div className="text-[15px] font-semibold text-gray-900 truncate group-hover:text-gray-600 transition-colors">
                           {session.title}
                         </div>
                         <div className="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
                           <span>{session.messages.length}개 메시지</span>
                         </div>
                       </div>
-                      <ChevronRight size={16} className="text-gray-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all shrink-0" />
+                      <ChevronRight size={16} className="text-gray-300 group-hover:text-gray-500 group-hover:translate-x-1 transition-all shrink-0" />
                     </button>
                   ))}
                 </div>
@@ -269,7 +269,7 @@ export default function HomeDashboard() {
               <h3 className="text-base font-bold text-gray-800 flex items-center gap-2.5">
                 <Bot size={18} className="text-gray-500" /> 에이전트
               </h3>
-              <button onClick={() => navigate('/agent')} className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 transition-all hover:gap-2">
+              <button onClick={() => navigate('/agent')} className="text-sm text-gray-600 hover:text-gray-700 font-semibold flex items-center gap-1 transition-all hover:gap-2">
                 관리 <ChevronRight size={14} />
               </button>
             </div>
@@ -283,9 +283,9 @@ export default function HomeDashboard() {
                 <div className="divide-y divide-gray-100">
                   {agents.slice(0, 4).map((agent, idx) => {
                     const colors = [
-                      'bg-blue-600',
+                      'bg-gray-600',
                       'bg-purple-600',
-                      'bg-green-600',
+                      'bg-green-500',
                       'bg-orange-600',
                     ];
                     const colorIdx = agent.id.charCodeAt(agent.id.length - 1) % colors.length;
@@ -320,9 +320,9 @@ export default function HomeDashboard() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { icon: Database, label: 'RAG 검색', desc: '벡터 + 그래프 하이브리드', color: 'text-purple-600', bg: 'bg-purple-50' },
-              { icon: Globe, label: '웹 검색', desc: 'DuckDuckGo / Brave / Tavily', color: 'text-blue-600', bg: 'bg-blue-50' },
+              { icon: Globe, label: '웹 검색', desc: 'DuckDuckGo / Brave / Tavily', color: 'text-gray-600', bg: 'bg-gray-50' },
               { icon: HardDrive, label: 'Text-to-SQL', desc: '자연어로 DB 쿼리', color: 'text-orange-600', bg: 'bg-orange-50' },
-              { icon: Brain, label: 'Deep Think', desc: '자기 검증 추론 모드', color: 'text-indigo-600', bg: 'bg-indigo-50' },
+              { icon: Brain, label: 'Deep Think', desc: '자기 검증 추론 모드', color: 'text-gray-600', bg: 'bg-gray-50' },
             ].map((feat, idx) => (
               <div
                 key={idx}

@@ -51,7 +51,7 @@ export default function KnowledgeBaseEditorModal({ isOpen, onClose, onSave, init
         {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b bg-gray-50/50">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+            <div className="p-2 bg-gray-100 text-gray-600 rounded-lg">
               <Database size={20} />
             </div>
             <h3 className="text-lg font-bold text-gray-800">
@@ -79,7 +79,7 @@ export default function KnowledgeBaseEditorModal({ isOpen, onClose, onSave, init
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
                   placeholder="예: 프로젝트 매뉴얼, 회사 규정집"
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm"
+                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-green-400 outline-none transition text-sm"
                   autoFocus
                 />
               </div>
@@ -89,7 +89,7 @@ export default function KnowledgeBaseEditorModal({ isOpen, onClose, onSave, init
                   value={formData.description}
                   onChange={(e) => setFormData({...formData, description: e.target.value})}
                   placeholder="이 지식 베이스에 대한 간단한 설명을 입력하세요."
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition text-sm resize-none h-20"
+                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 outline-none transition text-sm resize-none h-20"
                 />
               </div>
             </div>
@@ -106,7 +106,7 @@ export default function KnowledgeBaseEditorModal({ isOpen, onClose, onSave, init
                 <select 
                   value={formData.embeddingModel}
                   onChange={(e) => setFormData({...formData, embeddingModel: e.target.value})}
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm appearance-none cursor-pointer hover:border-blue-400 transition"
+                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 outline-none bg-white text-sm appearance-none cursor-pointer hover:border-gray-400 transition"
                 >
                   <option value="bge-m3">BAAI/bge-m3 (Recommended)</option>
                   <option value="text-embedding-3-small">OpenAI/text-embedding-3-small</option>
@@ -130,13 +130,13 @@ export default function KnowledgeBaseEditorModal({ isOpen, onClose, onSave, init
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <label className="text-xs font-bold text-gray-700">Chunk Size</label>
-                  <span className="text-xs font-mono text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{formData.chunkSize}</span>
+                  <span className="text-xs font-mono text-gray-600 bg-gray-50 px-2 py-0.5 rounded">{formData.chunkSize}</span>
                 </div>
                 <input 
                   type="range" min="128" max="2048" step="64" 
                   value={formData.chunkSize} 
                   onChange={(e) => setFormData({...formData, chunkSize: Number(e.target.value)})}
-                  className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-500"
                 />
                 <p className="text-[10px] text-gray-400">문서를 자르는 크기입니다. (Token 단위)</p>
               </div>
@@ -144,13 +144,13 @@ export default function KnowledgeBaseEditorModal({ isOpen, onClose, onSave, init
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <label className="text-xs font-bold text-gray-700">Chunk Overlap</label>
-                  <span className="text-xs font-mono text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{formData.chunkOverlap}</span>
+                  <span className="text-xs font-mono text-gray-600 bg-gray-50 px-2 py-0.5 rounded">{formData.chunkOverlap}</span>
                 </div>
                 <input 
                   type="range" min="0" max="200" step="10" 
                   value={formData.chunkOverlap} 
                   onChange={(e) => setFormData({...formData, chunkOverlap: Number(e.target.value)})}
-                  className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-500"
                 />
                 <p className="text-[10px] text-gray-400">문맥 유지를 위한 중첩 구간입니다.</p>
               </div>
@@ -169,7 +169,7 @@ export default function KnowledgeBaseEditorModal({ isOpen, onClose, onSave, init
                   <select
                     value={formData.externalServiceId}
                     onChange={(e) => setFormData({...formData, externalServiceId: e.target.value})}
-                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm appearance-none cursor-pointer hover:border-blue-400 transition"
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 outline-none bg-white text-sm appearance-none cursor-pointer hover:border-gray-400 transition"
                   >
                     <option value="">기본 (로컬 Qdrant)</option>
                     {qdrantServices.map(svc => (
@@ -199,7 +199,7 @@ export default function KnowledgeBaseEditorModal({ isOpen, onClose, onSave, init
           </button>
           <button 
             onClick={handleSubmit}
-            className="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-200 transition flex items-center gap-2"
+            className="px-5 py-2.5 text-sm font-bold text-white bg-green-500 hover:bg-green-600 rounded-xl shadow-lg shadow-green-100 transition flex items-center gap-2"
           >
             <Save size={16} /> {initialData ? '저장하기' : '생성하기'}
           </button>

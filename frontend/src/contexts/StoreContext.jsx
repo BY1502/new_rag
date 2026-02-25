@@ -128,84 +128,105 @@ export function StoreProvider({ children }) {
   });
   const [currentKbId, setCurrentKbId] = useState('default');
 
+  // 시스템 전문 에이전트 정의
+  const SYSTEM_AGENTS = [
+    {
+      id: 'agent-general',
+      name: '일반 대화 비서',
+      agentType: 'custom',
+      description: '지식 베이스 없이 자유로운 주제로 대화하는 범용 AI 비서입니다.',
+      model: 'gemma3:12b',
+      systemPrompt: '당신은 "RAG AI 비서"입니다. 사용자의 다양한 질문과 요청에 전문적이고 친절하게 응답하는 범용 AI 어시스턴트입니다.\n\n## 핵심 역할\n- 사용자의 질문에 정확하고 상세하게 답변합니다.\n- 복잡한 주제도 이해하기 쉽게 설명합니다.\n- 글쓰기, 번역, 요약, 코딩, 분석 등 다양한 작업을 수행합니다.\n\n## 응답 원칙\n1. **정확성 우선**: 확실하지 않은 정보는 솔직하게 말합니다.\n2. **구조화된 답변**: 제목, 소제목, 번호 리스트, 표 등을 활용합니다.\n3. **한국어 우선**: 기술 용어는 영어 원문을 병기합니다.\n4. **맥락 유지**: 이전 대화 내용을 기억합니다.\n5. **적극적 제안**: 추가 도움이 될 정보를 제안합니다.',
+      icon: 'sparkles',
+      published: true,
+      updated_at: new Date().toLocaleDateString()
+    },
+    {
+      id: 'agent-rag',
+      name: '문서 분석 전문가',
+      agentType: 'custom',
+      description: '업로드된 지식 베이스를 기반으로 정확하게 답변하는 RAG 에이전트입니다.',
+      model: 'gemma3:12b',
+      systemPrompt: '당신은 "RAG AI 문서 분석 전문가"입니다. 사용자가 업로드한 문서를 기반으로 정확한 답변을 제공하는 RAG 전문 에이전트입니다.\n\n## 핵심 역할\n- 지식 베이스에 저장된 문서를 검색하고 분석합니다.\n- 문서 내용을 요약, 비교, 분석합니다.\n- 문서에 없는 내용은 솔직하게 답합니다.\n\n## 응답 원칙\n1. **근거 기반 답변**: 출처 문서명이나 관련 섹션을 언급합니다.\n2. **정확한 인용**: 원문을 직접 인용하거나 요약합니다.\n3. **포괄적 검색**: 관련된 여러 문서를 종합합니다.\n4. **문서 범위 명시**: 답변 가능한 범위를 명확히 구분합니다.',
+      icon: 'file-text',
+      published: true,
+      updated_at: new Date().toLocaleDateString()
+    },
+    {
+      id: 'system-supervisor',
+      name: '감독 에이전트',
+      agentType: 'supervisor',
+      description: '사용자 질의를 분석하고 적절한 전문 에이전트에게 작업을 할당합니다.',
+      model: 'gemma3:12b',
+      systemPrompt: '사용자의 질의 의도를 분석하여 적절한 전문 에이전트(RAG, 웹검색, SQL, MCP, 물류)에게 작업을 위임하는 감독 에이전트입니다.',
+      icon: 'brain',
+      published: true,
+      updated_at: new Date().toLocaleDateString()
+    },
+    {
+      id: 'system-rag',
+      name: 'RAG 검색 에이전트',
+      agentType: 'rag',
+      description: '지식 베이스에서 관련 문서를 검색하고 분석합니다.',
+      model: 'gemma3:12b',
+      icon: 'file-text',
+      published: true,
+      updated_at: new Date().toLocaleDateString()
+    },
+    {
+      id: 'system-web',
+      name: '웹 검색 에이전트',
+      agentType: 'web_search',
+      description: '인터넷에서 최신 정보를 검색합니다.',
+      model: 'gemma3:12b',
+      icon: 'globe',
+      published: true,
+      updated_at: new Date().toLocaleDateString()
+    },
+    {
+      id: 'system-sql',
+      name: 'T2SQL 에이전트',
+      agentType: 't2sql',
+      description: '자연어를 SQL로 변환하여 데이터베이스를 조회합니다.',
+      model: 'gemma3:12b',
+      icon: 'database',
+      published: true,
+      updated_at: new Date().toLocaleDateString()
+    },
+    {
+      id: 'system-mcp',
+      name: 'MCP 도구 에이전트',
+      agentType: 'mcp',
+      description: '외부 MCP 도구를 사용하여 작업을 수행합니다.',
+      model: 'gemma3:12b',
+      icon: 'plug',
+      published: true,
+      updated_at: new Date().toLocaleDateString()
+    },
+    {
+      id: 'system-process',
+      name: '물류 에이전트',
+      agentType: 'process',
+      description: '배차, 경로 최적화 등 물류 업무를 처리합니다.',
+      model: 'gemma3:12b',
+      icon: 'truck',
+      published: true,
+      updated_at: new Date().toLocaleDateString()
+    },
+  ];
+
+  const SYSTEM_AGENT_IDS = SYSTEM_AGENTS.map(a => a.id);
+
   const [agents, setAgents] = useState(() => {
     const saved = localStorage.getItem('rag_ai_agents');
     let loadedAgents = saved ? JSON.parse(saved) : [];
-    if (loadedAgents.length <= 1) {
-      return [
-        {
-          id: 'agent-general',
-          name: '일반 대화 비서',
-          description: '지식 베이스 없이 자유로운 주제로 대화하는 범용 AI 비서입니다. 질문 답변, 글쓰기, 번역, 코딩, 브레인스토밍 등 다양한 작업을 수행합니다.',
-          model: 'gemma3:12b',
-          systemPrompt: `당신은 "RAG AI 비서"입니다. 사용자의 다양한 질문과 요청에 전문적이고 친절하게 응답하는 범용 AI 어시스턴트입니다.
-
-## 핵심 역할
-- 사용자의 질문에 정확하고 상세하게 답변합니다.
-- 복잡한 주제도 이해하기 쉽게 설명합니다.
-- 글쓰기, 번역, 요약, 코딩, 분석 등 다양한 작업을 수행합니다.
-
-## 응답 원칙
-1. **정확성 우선**: 확실하지 않은 정보는 솔직하게 "확실하지 않다"고 말합니다. 추측으로 답변하지 않습니다.
-2. **구조화된 답변**: 복잡한 답변은 제목, 소제목, 번호 리스트, 표 등을 활용하여 가독성을 높입니다.
-3. **한국어 우선**: 사용자가 한국어로 질문하면 한국어로 답변합니다. 기술 용어는 영어 원문을 병기합니다. (예: 벡터 데이터베이스(Vector Database))
-4. **맥락 유지**: 이전 대화 내용을 기억하고 맥락에 맞게 답변합니다.
-5. **적극적 제안**: 사용자의 질문 의도를 파악하여, 추가로 도움이 될 수 있는 정보나 후속 질문을 제안합니다.
-
-## 전문 분야
-- 프로그래밍 및 소프트웨어 개발 (Python, JavaScript, 데이터베이스 등)
-- 데이터 분석 및 시각화
-- 문서 작성, 보고서 요약, 번역
-- 비즈니스 전략 및 기획
-- 학술 연구 및 논문 분석
-- 일반 상식 및 교양
-
-## 금지 사항
-- 허위 정보 생성 금지
-- 유해하거나 비윤리적인 콘텐츠 생성 금지
-- 개인정보 수집 또는 저장 금지`,
-          published: true,
-          updated_at: new Date().toLocaleDateString()
-        },
-        {
-          id: 'agent-rag',
-          name: '문서 분석 전문가',
-          description: '업로드된 지식 베이스(문서)를 기반으로 정확하게 답변하는 RAG 에이전트입니다. 문서 내용을 분석, 요약, 비교하고 근거 기반 답변을 제공합니다.',
-          model: 'gemma3:12b',
-          systemPrompt: `당신은 "RAG AI 문서 분석 전문가"입니다. 사용자가 업로드한 문서(지식 베이스)를 기반으로 정확한 답변을 제공하는 RAG(Retrieval-Augmented Generation) 전문 에이전트입니다.
-
-## 핵심 역할
-- 지식 베이스에 저장된 문서를 검색하고 분석하여 근거 기반 답변을 제공합니다.
-- 문서 내용을 요약, 비교, 분석하는 전문 능력을 갖추고 있습니다.
-- 문서에 없는 내용은 솔직하게 "해당 문서에서 관련 정보를 찾을 수 없습니다"라고 답합니다.
-
-## 응답 원칙
-1. **근거 기반 답변**: 모든 답변은 검색된 문서 내용에 기반합니다. 답변 시 출처 문서명이나 관련 섹션을 언급합니다.
-2. **정확한 인용**: 가능하면 원문을 직접 인용하거나 요약하여 신뢰성을 높입니다.
-3. **포괄적 검색**: 하나의 문서뿐 아니라 관련된 여러 문서를 종합하여 답변합니다.
-4. **문서 범위 명시**: 답변 가능한 범위와 문서에서 다루지 않는 범위를 명확히 구분합니다.
-5. **구조화된 출력**: 분석 결과는 표, 리스트, 비교표 등 구조화된 형태로 제공합니다.
-
-## 전문 기능
-- **문서 요약**: "이 문서를 요약해줘" → 핵심 내용을 계층적으로 요약
-- **정보 추출**: "이 문서에서 날짜/금액/인물 정보를 찾아줘" → 정확한 정보 추출
-- **비교 분석**: "A 문서와 B 문서의 차이점은?" → 체계적 비교표 생성
-- **Q&A**: "~에 대해 설명해줘" → 문서 근거 기반 상세 설명
-- **핵심 키워드 추출**: 문서의 주요 주제와 키워드를 식별
-
-## 응답 형식
-- 답변 시작: 검색된 문서와의 관련성을 간략히 언급
-- 본문: 구조화된 답변 제공 (제목, 소제목, 번호 리스트 활용)
-- 답변 종료: 추가 질문 유도 또는 관련 분석 제안
-
-## 금지 사항
-- 문서에 없는 내용을 창작하거나 추측하지 않습니다
-- 검색 결과가 없을 때 일반 지식으로 대체하지 않습니다 (명시적으로 구분)
-- 문서 내용을 왜곡하거나 과장하지 않습니다`,
-          published: true,
-          updated_at: new Date().toLocaleDateString()
-        }
-      ];
+    // 시스템 에이전트가 없으면 시딩
+    const hasSystemAgents = SYSTEM_AGENTS.every(sa => loadedAgents.some(la => la.id === sa.id));
+    if (!hasSystemAgents) {
+      // 기존 사용자 에이전트 유지 + 누락된 시스템 에이전트 추가
+      const existingIds = new Set(loadedAgents.map(a => a.id));
+      const missingSystem = SYSTEM_AGENTS.filter(sa => !existingIds.has(sa.id));
+      return [...missingSystem, ...loadedAgents.filter(a => !SYSTEM_AGENT_IDS.includes(a.id))];
     }
     return loadedAgents;
   });
@@ -333,10 +354,14 @@ export function StoreProvider({ children }) {
           systemPrompt: a.system_prompt || '',
           icon: a.icon || '',
           color: a.color || '',
+          agentType: a.agent_type || 'custom',
           published: a.published,
           updated_at: a.updated_at,
         }));
-        setAgents(mapped);
+        // 백엔드에서 가져온 에이전트 + 누락된 시스템 에이전트 병합
+        const backendIds = new Set(mapped.map(a => a.id));
+        const missingSystem = SYSTEM_AGENTS.filter(sa => !backendIds.has(sa.id));
+        setAgents([...missingSystem, ...mapped]);
       }
 
       // 세션 목록 로드

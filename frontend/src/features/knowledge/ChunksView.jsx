@@ -93,7 +93,7 @@ export default function ChunksView({ kbId }) {
       {/* 왼쪽: 파일 사이드바 */}
       <div className="w-72 border-r border-gray-200 bg-white flex flex-col shrink-0">
         <div className="h-14 border-b border-gray-200 flex items-center px-5 gap-3 shrink-0 bg-gray-50">
-          <div className="p-2 rounded-lg bg-blue-600">
+          <div className="p-2 rounded-lg bg-gray-600">
             <Folder size={16} className="text-white" />
           </div>
           <span className="text-sm font-bold text-gray-900">소스 파일</span>
@@ -103,7 +103,7 @@ export default function ChunksView({ kbId }) {
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {filesLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 size={20} className="animate-spin text-gray-300" />
+              <Loader2 size={20} className="animate-spin text-green-200" />
             </div>
           ) : files.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-gray-400">
@@ -117,17 +117,17 @@ export default function ChunksView({ kbId }) {
                 onClick={() => handleSelectFile(null)}
                 className={`group w-full text-left px-4 py-3 rounded-lg text-sm transition-all ${
                   selectedSource === null
-                    ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                    ? 'bg-green-500 text-white font-semibold shadow-sm'
                     : 'text-gray-700 hover:bg-gray-50 font-medium'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`p-1.5 rounded-lg transition-all ${selectedSource === null ? 'bg-blue-500' : 'bg-gray-100 group-hover:bg-gray-200'}`}>
+                  <div className={`p-1.5 rounded-lg transition-all ${selectedSource === null ? 'bg-gray-500' : 'bg-gray-100 group-hover:bg-gray-200'}`}>
                     <Layers size={14} className={selectedSource === null ? 'text-white' : 'text-gray-600'} />
                   </div>
                   <span className="truncate">전체 파일</span>
                   <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-semibold transition-all ${
-                    selectedSource === null ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
+                    selectedSource === null ? 'bg-green-400 text-white' : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
                   }`}>
                     {totalChunks}
                   </span>
@@ -186,7 +186,7 @@ export default function ChunksView({ kbId }) {
                 placeholder="시맨틱 검색..."
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
+                className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-green-400 outline-none bg-white"
               />
             </div>
             {searchQuery && (
@@ -207,7 +207,7 @@ export default function ChunksView({ kbId }) {
         <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
           {loading ? (
             <div className="h-full flex flex-col items-center justify-center text-gray-400">
-              <Loader2 size={28} className="animate-spin text-blue-400 mb-3" />
+              <Loader2 size={28} className="animate-spin text-green-300 mb-3" />
               <p className="text-sm font-bold">청크 데이터를 불러오는 중...</p>
             </div>
           ) : error ? (
@@ -217,7 +217,7 @@ export default function ChunksView({ kbId }) {
               <p className="text-xs">{error}</p>
               <button
                 onClick={() => fetchChunks(null, null, selectedSource)}
-                className="mt-3 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition"
+                className="mt-3 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-bold hover:bg-green-600 transition"
               >
                 다시 시도
               </button>
@@ -249,8 +249,8 @@ export default function ChunksView({ kbId }) {
                     key={chunk.id}
                     className={`group bg-white border rounded-lg transition-all cursor-pointer ${
                       isExpanded
-                        ? 'border-blue-400 shadow-md'
-                        : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                        ? 'border-gray-400 shadow-md'
+                        : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
                     }`}
                     onClick={() => setExpandedId(isExpanded ? null : chunk.id)}
                   >
@@ -259,7 +259,7 @@ export default function ChunksView({ kbId }) {
                       <span className={`shrink-0 w-11 h-11 rounded-lg flex items-center justify-center text-sm font-bold shadow-sm transition-all ${
                         isImage
                           ? 'bg-pink-600 text-white'
-                          : 'bg-blue-600 text-white'
+                          : 'bg-green-500 text-white'
                       }`}>
                         {isImage ? <ImageIcon size={18} /> : `#${chunk.chunk_index}`}
                       </span>
@@ -279,7 +279,7 @@ export default function ChunksView({ kbId }) {
                             </span>
                           )}
                           {chunk.score != null && (
-                            <span className="text-xs font-semibold bg-blue-600 text-white px-2.5 py-1 rounded-full">
+                            <span className="text-xs font-semibold bg-green-500 text-white px-2.5 py-1 rounded-full">
                               {chunk.score}
                             </span>
                           )}
@@ -291,7 +291,7 @@ export default function ChunksView({ kbId }) {
                           <p className="text-sm text-gray-700 mt-1.5 line-clamp-1 leading-relaxed italic">{chunk.caption}</p>
                         )}
                       </div>
-                      <div className={`shrink-0 transition-all ${isExpanded ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'}`}>
+                      <div className={`shrink-0 transition-all ${isExpanded ? 'text-gray-600' : 'text-gray-400 group-hover:text-gray-500'}`}>
                         {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </div>
                     </div>
@@ -307,12 +307,12 @@ export default function ChunksView({ kbId }) {
                                 <img
                                   src={thumbnailUrl}
                                   alt={fileName}
-                                  className="w-full max-w-lg mx-auto rounded-lg border-2 border-gray-200 cursor-pointer hover:border-blue-500 transition-all shadow-sm"
+                                  className="w-full max-w-lg mx-auto rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-500 transition-all shadow-sm"
                                   onClick={(e) => { e.stopPropagation(); setLightboxImage(fullImageUrl); }}
                                 />
                                 <button
                                   onClick={(e) => { e.stopPropagation(); setLightboxImage(fullImageUrl); }}
-                                  className="absolute top-3 right-3 p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg opacity-0 group-hover/img:opacity-100 transition-all shadow-sm"
+                                  className="absolute top-3 right-3 p-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg opacity-0 group-hover/img:opacity-100 transition-all shadow-sm"
                                   title="원본 크기로 보기"
                                 >
                                   <Eye size={16} />

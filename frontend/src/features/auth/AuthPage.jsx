@@ -34,7 +34,7 @@ export default function AuthPage() {
       <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
         <div className="p-8">
           <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
+            <div className="w-16 h-16 bg-gray-600 rounded-2xl flex items-center justify-center shadow-lg shadow-gray-500/30">
               <Bot size={40} className="text-white" />
             </div>
           </div>
@@ -55,7 +55,7 @@ export default function AuthPage() {
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-400 focus:bg-white outline-none transition-all"
                 placeholder="name@example.com"
                 required
               />
@@ -67,7 +67,7 @@ export default function AuthPage() {
                 type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-400 focus:bg-white outline-none transition-all"
                 placeholder="••••••••"
                 required
               />
@@ -76,7 +76,7 @@ export default function AuthPage() {
             <button 
               type="submit" 
               disabled={loading}
-              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
             >
               {loading ? <Loader2 size={20} className="animate-spin" /> : '로그인'}
             </button>
@@ -85,7 +85,7 @@ export default function AuthPage() {
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
               계정이 없으신가요?{' '}
-              <Link to="/register" className="text-indigo-600 font-bold hover:underline">
+              <Link to="/register" className="text-gray-600 font-bold hover:underline">
                 회원가입
               </Link>
             </p>

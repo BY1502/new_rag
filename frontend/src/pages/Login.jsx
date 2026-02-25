@@ -22,18 +22,18 @@ export default function Login() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-900">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-96">
-        <h2 className="text-2xl font-bold mb-6 text-center text-indigo-600">RAG AI Login</h2>
+        <h2 className="text-2xl font-bold mb-6 text-center text-gray-600">RAG AI Login</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl"
             value={email} onChange={(e) => setEmail(e.target.value)} required />
           <input type="password" placeholder="Password" className="w-full p-3 border rounded-xl"
             value={password} onChange={(e) => setPassword(e.target.value)} required />
-          <button type="submit" disabled={loading} className="w-full bg-indigo-600 text-white p-3 rounded-xl font-bold hover:bg-indigo-700 transition">
+          <button type="submit" disabled={loading} className="w-full bg-green-500 text-white p-3 rounded-xl font-bold hover:bg-green-600 transition">
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
         <div className="mt-4 text-center text-sm text-gray-500">
-          계정이 없으신가요? <Link to="/register" className="text-indigo-600 hover:underline">회원가입</Link>
+          계정이 없으신가요? <Link to="/register" className="text-gray-600 hover:underline">회원가입</Link>
         </div>
       </div>
     </div>

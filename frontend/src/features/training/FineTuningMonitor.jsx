@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { finetuningAPI, settingsAPI } from "../../api/client";
-import { Loader2, Zap, CheckCircle, XCircle, Clock, Trash2, Cpu } from "../../components/ui/Icon";
+import { Loader2, Zap, CheckCircle, XCircle, Clock, Trash2, Cpu, Database } from "../../components/ui/Icon";
 
 const DEFAULT_BASE_MODEL = "Qwen/Qwen2.5-3B-Instruct";
 
 export default function FineTuningMonitor() {
+  const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
   const [customModels, setCustomModels] = useState([]);
   const [baseModels, setBaseModels] = useState([]);
@@ -106,15 +108,15 @@ export default function FineTuningMonitor() {
   const getStatusColor = (status) => {
     switch (status) {
       case "completed":
-        return "text-green-600 bg-green-50 dark:bg-green-900/30";
+        return "text-gray-700 bg-gray-50 dark:bg-gray-900/30 dark:text-gray-300";
       case "running":
-        return "text-blue-600 bg-blue-50 dark:bg-blue-900/30";
+        return "text-gray-600 bg-gray-50/70 dark:bg-gray-900/20 dark:text-gray-400";
       case "failed":
         return "text-red-600 bg-red-50 dark:bg-red-900/30";
       case "cancelled":
         return "text-gray-600 bg-gray-50 dark:bg-gray-900/30";
       default:
-        return "text-yellow-600 bg-yellow-50 dark:bg-yellow-900/30";
+        return "text-gray-400 bg-gray-50/50 dark:bg-gray-900/10 dark:text-gray-500";
     }
   };
 
@@ -142,7 +144,7 @@ export default function FineTuningMonitor() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <Loader2 className="animate-spin text-indigo-600" size={32} />
+        <Loader2 className="animate-spin text-green-500" size={32} />
       </div>
     );
   }
@@ -150,6 +152,23 @@ export default function FineTuningMonitor() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
       <div className="max-w-7xl mx-auto space-y-6">
+        {/* 탭 네비게이션 */}
+        <div className="flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => navigate('/training')}
+            className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+          >
+            <Database size={16} className="inline mr-2" />
+            학습 데이터
+          </button>
+          <button
+            className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-green-500 text-white shadow-sm"
+          >
+            <Zap size={16} className="inline mr-2" />
+            파인튜닝 모니터
+          </button>
+        </div>
+
         {/* 헤더 */}
         <div className="flex items-center justify-between">
           <div>
@@ -158,7 +177,7 @@ export default function FineTuningMonitor() {
           </div>
           <button
             onClick={loadData}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+            className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
           >
             <Loader2 size={16} /> 새로고침
           </button>
@@ -176,7 +195,7 @@ export default function FineTuningMonitor() {
               <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">다운로드된 모델</div>
               <div className="flex flex-wrap gap-2">
                 {baseModels.map((m, i) => (
-                  <span key={i} className="px-3 py-1.5 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg text-sm font-mono border border-green-200 dark:border-green-800">
+                  <span key={i} className="px-3 py-1.5 bg-gray-50 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-mono border border-gray-200 dark:border-gray-800">
                     {m.name || m}
                   </span>
                 ))}
@@ -196,7 +215,7 @@ export default function FineTuningMonitor() {
             <button
               onClick={handleDownloadModel}
               disabled={downloading || !downloadModel.trim()}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 whitespace-nowrap"
+              className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition disabled:opacity-50 whitespace-nowrap"
             >
               {downloading ? <Loader2 size={16} className="animate-spin" /> : <Cpu size={16} />}
               {downloading ? "다운로드 중..." : "모델 다운로드"}
@@ -207,16 +226,16 @@ export default function FineTuningMonitor() {
           {downloadStatus && (
             <div className={`mt-3 p-3 rounded-lg text-sm ${
               downloadStatus.status === "done"
-                ? "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                ? "bg-gray-50 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300"
                 : downloadStatus.status === "error"
                 ? "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300"
-                : "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                : "bg-gray-50/70 dark:bg-gray-900/20 text-gray-600 dark:text-gray-400"
             }`}>
               {downloadStatus.message || downloadStatus.status}
               {downloadStatus.progress_percent != null && (
                 <div className="mt-2 w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2 overflow-hidden">
                   <div
-                    className="bg-blue-600 h-2 transition-all duration-300"
+                    className="bg-green-400 h-2 transition-all duration-300"
                     style={{ width: `${downloadStatus.progress_percent}%` }}
                   />
                 </div>
@@ -239,22 +258,25 @@ export default function FineTuningMonitor() {
               {customModels.map((model, idx) => (
                 <div
                   key={idx}
-                  className={`p-4 bg-gradient-to-br rounded-lg border ${
+                  className={`p-4 rounded-lg border-2 transition-all ${
                     defaultModel === model
-                      ? "from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 border-green-300 dark:border-green-700"
-                      : "from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/30 border-indigo-200 dark:border-indigo-700"
+                      ? "border-green-400 bg-green-50/50 dark:bg-green-900/20 shadow-sm"
+                      : "border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800 hover:border-gray-300"
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-1">
-                    <Zap size={14} className={defaultModel === model ? "text-green-600" : "text-indigo-600"} />
+                  <div className="flex items-center gap-2 mb-2">
+                    <Zap size={14} className={defaultModel === model ? "text-green-500" : "text-gray-400 dark:text-gray-500"} />
                     <div className="font-mono text-sm text-gray-900 dark:text-white font-semibold truncate flex-1">
                       {model}
                     </div>
+                    {defaultModel === model && (
+                      <span className="text-[10px] px-2 py-0.5 bg-green-500 text-white rounded-full font-bold">활성</span>
+                    )}
                   </div>
                   <div className="flex items-center justify-between mt-2">
                     {defaultModel === model ? (
                       <>
-                        <span className="text-xs text-green-600 dark:text-green-400 font-medium">기본 모델</span>
+                        <span className="text-xs text-green-600 dark:text-green-400 font-medium">채팅 시 자동 적용됨</span>
                         <button
                           onClick={handleClearDefaultModel}
                           className="text-xs px-2 py-1 text-gray-500 hover:text-red-500 transition"
@@ -267,7 +289,7 @@ export default function FineTuningMonitor() {
                         <span className="text-xs text-gray-500 dark:text-gray-400">사용 가능</span>
                         <button
                           onClick={() => handleSetDefaultModel(model)}
-                          className="text-xs px-2 py-1 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded hover:bg-indigo-200 dark:hover:bg-indigo-800 transition"
+                          className="text-xs px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 font-medium transition"
                         >
                           기본 모델로 설정
                         </button>
@@ -308,7 +330,7 @@ export default function FineTuningMonitor() {
                         </span>
                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                           job.provider === "unsloth"
-                            ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                            ? "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300"
                             : "bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300"
                         }`}>
                           {getProviderLabel(job.provider)}
@@ -324,20 +346,20 @@ export default function FineTuningMonitor() {
                         {job.output_model_name && (
                           <div className="flex items-center gap-2">
                             <strong>생성된 모델:</strong>{" "}
-                            <span className="font-mono text-xs text-green-600 dark:text-green-400">
+                            <span className="font-mono text-xs text-gray-600 dark:text-gray-400">
                               {job.output_model_name}
                             </span>
                             {job.status === "completed" && defaultModel !== job.output_model_name && (
                               <button
                                 onClick={() => handleSetDefaultModel(job.output_model_name)}
-                                className="text-xs px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded hover:bg-indigo-200 dark:hover:bg-indigo-800 transition"
+                                className="text-xs px-2.5 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 font-medium transition"
                               >
                                 기본 모델로 설정
                               </button>
                             )}
                             {job.status === "completed" && defaultModel === job.output_model_name && (
-                              <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 rounded">
-                                현재 기본 모델
+                              <span className="text-xs px-2.5 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-md font-bold flex items-center gap-1">
+                                <CheckCircle size={10} /> 현재 기본 모델
                               </span>
                             )}
                           </div>
@@ -345,7 +367,7 @@ export default function FineTuningMonitor() {
                         {job.final_loss != null && (
                           <div>
                             <strong>최종 Loss:</strong>{" "}
-                            <span className="font-mono text-xs text-blue-600 dark:text-blue-400">
+                            <span className="font-mono text-xs text-gray-600 dark:text-gray-400">
                               {job.final_loss.toFixed(4)}
                             </span>
                           </div>
@@ -370,7 +392,7 @@ export default function FineTuningMonitor() {
                   {job.status === "running" && (
                     <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2 overflow-hidden">
                       <div
-                        className="bg-blue-600 h-2 transition-all duration-500"
+                        className="bg-green-400 h-2 transition-all duration-500"
                         style={{ width: `${job.progress}%` }}
                       />
                     </div>

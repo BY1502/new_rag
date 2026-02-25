@@ -26,7 +26,7 @@ python-dotenv
 pydantic-settings
 email-validator
 docling
-duckduckgo-search
+ddgs>=6.0.0  # DuckDuckGo 웹 검색 (구 duckduckgo-search)
 langgraph
 bcrypt<4.0.0
 geopy  # ✅ 좌표 변환용

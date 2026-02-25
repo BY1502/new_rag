@@ -57,18 +57,18 @@ export default function Home() {
           messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`flex max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} items-start gap-3`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${msg.role === 'user' ? 'bg-indigo-600' : 'bg-green-600'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${msg.role === 'user' ? 'bg-gray-600' : 'bg-green-500'}`}>
                   {msg.role === 'user' ? <User size={16} className="text-white" /> : <Bot size={16} className="text-white" />}
                 </div>
                 <div className="flex flex-col gap-1 min-w-0">
                   {msg.thinking && (
-                      <div className="text-xs text-gray-500 italic bg-white p-3 rounded-lg border border-indigo-100 shadow-sm animate-pulse mb-1">
+                      <div className="text-xs text-gray-500 italic bg-white p-3 rounded-lg border border-gray-100 shadow-sm animate-pulse mb-1">
                          Thinking: {msg.thinking}
                       </div>
                   )}
                   <div className={`p-4 rounded-2xl shadow-sm text-sm leading-relaxed ${
                       msg.role === 'user' 
-                      ? 'bg-indigo-600 text-white rounded-tr-none' 
+                      ? 'bg-green-500 text-white rounded-tr-none' 
                       : 'bg-white text-gray-800 border border-gray-200 rounded-tl-none'
                     }`}>
                     <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -88,10 +88,10 @@ export default function Home() {
             value={inputMessage} 
             onChange={(e) => setInputMessage(e.target.value)}
             placeholder="질문을 입력하세요..."
-            className="w-full pl-5 pr-14 py-4 bg-gray-100 border-none rounded-full focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all shadow-inner text-gray-700" 
+            className="w-full pl-5 pr-14 py-4 bg-gray-100 border-none rounded-full focus:ring-2 focus:ring-green-400 focus:bg-white transition-all shadow-inner text-gray-700" 
             disabled={isGenerating} 
           />
-          <button type="submit" className="absolute right-3 p-2 bg-indigo-600 text-white rounded-full shadow-md">
+          <button type="submit" className="absolute right-3 p-2 bg-green-500 text-white rounded-full shadow-md">
             {isGenerating ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
           </button>
         </form>

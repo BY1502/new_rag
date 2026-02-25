@@ -25,6 +25,7 @@ import {
   HardDrive,
   ThumbsUp,
   ThumbsDown,
+  Cpu,
 } from "../../components/ui/Icon";
 
 const AgentIcon = ({ agentId, size = 12, className = "" }) => {
@@ -422,7 +423,7 @@ export default function ChatInterface() {
                       ...s,
                       messages: s.messages.map((m) =>
                         m.id === aiMessageId
-                          ? { ...m, thinking: chunk.thinking }
+                          ? { ...m, thinking: chunk.thinking, activeAgent: chunk.active_agent || m.activeAgent }
                           : m,
                       ),
                     }
@@ -624,7 +625,7 @@ export default function ChatInterface() {
       >
         {currentMessages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-gray-500 gap-6 px-4">
-            <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg rounded-2xl flex items-center justify-center">
+            <div className="w-20 h-20 bg-gradient-to-br from-green-400 to-green-600 shadow-lg rounded-2xl flex items-center justify-center">
               <AgentIcon
                 agentId={currentAgent?.id}
                 size={36}
@@ -653,7 +654,7 @@ export default function ChatInterface() {
                     setInput(q);
                     textareaRef.current?.focus();
                   }}
-                  className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-700 hover:bg-gray-50 hover:border-green-400 hover:text-green-600 transition-all font-medium shadow-sm"
+                  className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-700 hover:bg-gray-50 hover:border-green-300 hover:text-green-500 transition-all font-medium shadow-sm"
                 >
                   {q}
                 </button>
@@ -686,7 +687,7 @@ export default function ChatInterface() {
             {isTyping && currentMessages.length > 0 && currentMessages[currentMessages.length - 1].role === "user" && (
               <div className="flex items-start gap-3 py-4">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                  <Bot size={16} className="text-indigo-600 dark:text-indigo-400" />
+                  <Bot size={16} className="text-gray-600 dark:text-gray-400" />
                 </div>
                 <div className="flex items-center gap-2 pt-2">
                   <div className="flex gap-1">
@@ -716,7 +717,29 @@ export default function ChatInterface() {
             </div>
           )}
 
-          <div className="bg-white border border-gray-300 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-green-500 focus-within:border-green-500 transition-all flex flex-col relative">
+          {/* 현재 에이전트 정보 바 */}
+          {currentAgent && (
+            <div className="mb-2 bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 flex items-center gap-3">
+              <div className="w-7 h-7 rounded-lg bg-green-50 border border-green-100 flex items-center justify-center shrink-0">
+                <AgentIcon agentId={currentAgent.id} size={14} className="text-green-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-gray-800">{currentAgent.name}</span>
+                  <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 font-medium flex items-center gap-1">
+                    <Cpu size={9} /> {currentAgent.model || config.llm}
+                  </span>
+                </div>
+                {currentAgent.systemPrompt && (
+                  <p className="text-[10px] text-gray-400 truncate mt-0.5 max-w-md">
+                    {currentAgent.systemPrompt}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white border border-gray-300 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-green-400 focus-within:border-green-400 transition-all flex flex-col relative">
             {/* 상단 태그 영역 */}
             <div className="px-3 pt-2.5 flex flex-wrap items-center gap-1.5">
               {/* 에이전트 선택 */}
@@ -730,7 +753,7 @@ export default function ChatInterface() {
                   }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
                     currentAgent
-                      ? "bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200"
+                      ? "bg-green-50 hover:bg-green-100 text-green-700 border border-green-200"
                       : "bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200"
                   }`}
                 >
@@ -748,7 +771,7 @@ export default function ChatInterface() {
                   />
                 </button>
                 {isAgentMenuOpen && (
-                  <div className="absolute bottom-full left-0 mb-2 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-30 overflow-hidden">
+                  <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-30 overflow-hidden">
                     <div className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
                       에이전트 선택
                     </div>
@@ -761,13 +784,13 @@ export default function ChatInterface() {
                         }}
                         className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 transition ${
                           !currentAgent
-                            ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                            ? "bg-gray-50 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300"
                             : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                         }`}
                       >
                         <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
                           !currentAgent
-                            ? "bg-indigo-100 dark:bg-indigo-800 text-indigo-600 dark:text-indigo-300"
+                            ? "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
                             : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
                         }`}>
                           <Bot size={13} />
@@ -777,7 +800,7 @@ export default function ChatInterface() {
                           <div className="text-[10px] text-gray-400 dark:text-gray-500 truncate">에이전트 없이 대화</div>
                         </div>
                         {!currentAgent && (
-                          <CheckCircle size={12} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+                          <CheckCircle size={12} className="text-green-500 dark:text-green-400 shrink-0" />
                         )}
                       </button>
                       <div className="h-px bg-gray-100 dark:bg-gray-700 mx-2 my-1" />
@@ -790,23 +813,27 @@ export default function ChatInterface() {
                           }}
                           className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 transition ${
                             currentAgent?.id === agent.id
-                              ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
-                              : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                              ? "bg-green-50 dark:bg-green-900/20 text-gray-700 dark:text-gray-300 border border-green-200 dark:border-green-800"
+                              : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-transparent"
                           }`}
                         >
-                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
                             currentAgent?.id === agent.id
-                              ? "bg-indigo-100 dark:bg-indigo-800 text-indigo-600 dark:text-indigo-300"
+                              ? "bg-green-100 dark:bg-green-800 text-green-600 dark:text-green-300"
                               : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
                           }`}>
                             <AgentIcon agentId={agent.id} size={13} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs font-bold truncate">{agent.name}</div>
-                            <div className="text-[10px] text-gray-400 dark:text-gray-500 truncate">{agent.model || config.llm}</div>
+                            <div className="text-[10px] text-gray-400 dark:text-gray-500 truncate flex items-center gap-1">
+                              <Cpu size={9} /> {agent.model || config.llm}
+                              {agent.systemPrompt && <span className="text-gray-300 dark:text-gray-600 mx-0.5">|</span>}
+                              {agent.systemPrompt && <span className="truncate">{agent.systemPrompt.slice(0, 30)}{agent.systemPrompt.length > 30 ? '...' : ''}</span>}
+                            </div>
                           </div>
                           {currentAgent?.id === agent.id && (
-                            <CheckCircle size={12} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+                            <CheckCircle size={12} className="text-green-500 dark:text-green-400 shrink-0" />
                           )}
                         </button>
                       ))}
@@ -824,7 +851,7 @@ export default function ChatInterface() {
                     setIsAgentMenuOpen(false);
                     setIsMcpMenuOpen(false);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-50 text-green-600 border border-green-100 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
                 >
                   <Database size={12} />
                   <span className="max-w-[120px] truncate">
@@ -855,7 +882,7 @@ export default function ChatInterface() {
                             <div
                               className={`w-4 h-4 border-2 rounded flex items-center justify-center transition ${
                                 isSelected
-                                  ? "bg-emerald-500 border-emerald-500"
+                                  ? "bg-green-400 border-green-400"
                                   : "border-gray-300 dark:border-gray-600"
                               }`}
                             >
@@ -956,7 +983,7 @@ export default function ChatInterface() {
                   onClick={() => setUseWebSearch(!useWebSearch)}
                   className={`p-2 rounded-xl transition flex items-center gap-1.5 ${
                     useWebSearch
-                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600"
+                      ? "bg-green-50 dark:bg-green-900/30 text-green-600"
                       : "text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600"
                   }`}
                   title="웹 검색"
@@ -975,7 +1002,7 @@ export default function ChatInterface() {
                     }}
                     className={`p-2 rounded-xl transition flex items-center gap-1.5 ${
                       activeMcpIds.length > 0 || isMcpMenuOpen
-                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                        ? "bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-300"
                         : "text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600"
                     }`}
                     title="MCP 도구"
@@ -1010,7 +1037,7 @@ export default function ChatInterface() {
                                 <div
                                   className={`w-4 h-4 border-2 rounded flex items-center justify-center transition ${
                                     isActive
-                                      ? "bg-green-500 border-green-500"
+                                      ? "bg-green-400 border-green-400"
                                       : "border-gray-300 dark:border-gray-600"
                                   }`}
                                 >
@@ -1142,10 +1169,11 @@ export default function ChatInterface() {
                       setIsMcpMenuOpen(false);
                       setIsDbMenuOpen(false);
                     }}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-mono text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300 transition-colors cursor-pointer"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-300 transition-colors cursor-pointer border border-gray-200 dark:border-gray-600"
                     title="모델 변경"
                   >
-                    <span className="max-w-[140px] truncate">
+                    <Cpu size={10} className="text-gray-400 shrink-0" />
+                    <span className="max-w-[140px] truncate font-semibold">
                       {currentAgent?.model || config.llm}
                     </span>
                     <ChevronDown size={8} className={`transition-transform ${isModelMenuOpen ? "rotate-180" : ""}`} />
@@ -1197,7 +1225,7 @@ export default function ChatInterface() {
                                       }}
                                       className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition ${
                                         isActive
-                                          ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                                          ? "bg-gray-50 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300"
                                           : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                                       }`}
                                     >
@@ -1205,12 +1233,12 @@ export default function ChatInterface() {
                                         <div className="text-xs font-semibold truncate flex items-center gap-1">
                                           {m.display_name || m.name}
                                           {m.is_korean && (
-                                            <span className="text-[8px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1 py-0.5 rounded font-bold shrink-0">KR</span>
+                                            <span className="text-[8px] bg-green-50 dark:bg-green-800/30 text-green-600 dark:text-green-300 px-1 py-0.5 rounded font-bold shrink-0">KR</span>
                                           )}
                                         </div>
                                       </div>
                                       {isActive && (
-                                        <CheckCircle size={12} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                                        <CheckCircle size={12} className="text-green-500 dark:text-green-400 shrink-0" />
                                       )}
                                     </button>
                                   );
@@ -1229,7 +1257,7 @@ export default function ChatInterface() {
                 disabled={(!input.trim() && files.length === 0) || isTyping || isExtractingFiles}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-sm ${
                   (input.trim() || files.length > 0) && !isTyping && !isExtractingFiles
-                    ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow"
+                    ? "bg-green-500 text-white hover:bg-green-600 shadow-sm hover:shadow"
                     : "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
                 }`}
               >
@@ -1270,14 +1298,14 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
         <div
           className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
             isUser
-              ? "bg-indigo-600"
+              ? "bg-gray-600"
               : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
           }`}
         >
           {isUser ? (
             <User size={16} className="text-white" />
           ) : (
-            <Bot size={16} className="text-indigo-600 dark:text-indigo-400" />
+            <Bot size={16} className="text-gray-600 dark:text-gray-400" />
           )}
         </div>
 
@@ -1304,18 +1332,64 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
             )}
           </div>
 
+          {/* 도구 호출 뱃지 */}
+          {!isUser && msg.toolCallsMeta && msg.toolCallsMeta.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {msg.toolCallsMeta.map((tc, i) => {
+                const toolStyles = {
+                  vector_retrieval: { icon: "📚", label: "RAG 검색", bg: "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-300 border-purple-200 dark:border-purple-800" },
+                  web_search: { icon: "🌐", label: "웹 검색", bg: "bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-300 border-green-200 dark:border-green-800" },
+                  mcp_tools: { icon: "🔌", label: "MCP", bg: "bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800" },
+                  sql_query: { icon: "🗄️", label: "SQL", bg: "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-300 border-amber-200 dark:border-amber-800" },
+                  process: { icon: "⚙️", label: "물류 도구", bg: "bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-300 border-orange-200 dark:border-orange-800" },
+                };
+                const style = toolStyles[tc.name] || { icon: "🔧", label: tc.name || "도구", bg: "bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700" };
+                const durationSec = tc.duration_ms ? (tc.duration_ms / 1000).toFixed(1) : null;
+                return (
+                  <span key={i} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${style.bg}`}>
+                    <span>{style.icon}</span> {style.label}
+                    {durationSec && <span className="opacity-50">{durationSec}s</span>}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
           {/* Thinking */}
           {msg.thinking && (
             <div className={`text-xs text-gray-500 dark:text-gray-400 italic p-3 rounded-xl border ${
               thinkingDone
                 ? "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
-                : "bg-indigo-50/50 dark:bg-indigo-900/20 border-indigo-100 dark:border-indigo-900"
+                : "bg-gray-50/50 dark:bg-gray-900/20 border-gray-100 dark:border-gray-900"
             }`}>
               <div className="flex items-center gap-2 mb-1.5 font-bold text-[11px]">
                 {thinkingDone ? (
-                  <><CheckCircle size={11} className="text-green-500" /> <span className="text-gray-500">사고 과정</span></>
+                  <><CheckCircle size={11} className="text-green-400" /> <span className="text-gray-500">사고 과정</span></>
                 ) : (
-                  <><Loader2 size={11} className="animate-spin text-indigo-500" /> <span className="text-indigo-500">분석 중...</span></>
+                  <><Loader2 size={11} className="animate-spin text-green-400" /> <span className="text-gray-500">분석 중...</span></>
+                )}
+                {msg.activeAgent && (
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold border not-italic ${
+                    {
+                      supervisor: 'bg-purple-50 text-purple-600 border-purple-200',
+                      rag: 'bg-blue-50 text-blue-600 border-blue-200',
+                      web_search: 'bg-cyan-50 text-cyan-600 border-cyan-200',
+                      t2sql: 'bg-amber-50 text-amber-600 border-amber-200',
+                      mcp: 'bg-indigo-50 text-indigo-600 border-indigo-200',
+                      process: 'bg-orange-50 text-orange-600 border-orange-200',
+                      synthesizer: 'bg-green-50 text-green-600 border-green-200',
+                    }[msg.activeAgent] || 'bg-gray-50 text-gray-600 border-gray-200'
+                  }`}>
+                    {{
+                      supervisor: 'Supervisor',
+                      rag: 'RAG',
+                      web_search: 'Web Search',
+                      t2sql: 'T2SQL',
+                      mcp: 'MCP',
+                      process: 'Process',
+                      synthesizer: 'Synthesizer',
+                    }[msg.activeAgent] || msg.activeAgent}
+                  </span>
                 )}
               </div>
               <div className="pl-4 border-l-2 border-gray-200 dark:border-gray-600 leading-relaxed max-h-32 overflow-y-auto custom-scrollbar">
@@ -1337,7 +1411,7 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
                   <Copy size={11} />
                 </button>
               </div>
-              <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap leading-relaxed overflow-x-auto">
+              <pre className="text-xs text-green-300 font-mono whitespace-pre-wrap leading-relaxed overflow-x-auto">
                 {msg.generatedSql}
               </pre>
             </div>
@@ -1383,21 +1457,21 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
             <div
               className={`px-4 py-3 rounded-2xl text-sm leading-relaxed break-words relative group/bubble ${
                 isUser
-                  ? "bg-indigo-600 text-white rounded-tr-sm"
+                  ? "bg-green-500 text-white rounded-tr-sm"
                   : "bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded-tl-sm"
               }`}
             >
               {isUser ? (
                 <div className="whitespace-pre-wrap">{msg.text}</div>
               ) : (
-                <div className="markdown-body prose prose-sm dark:prose-invert max-w-none prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-code:text-indigo-600 dark:prose-code:text-indigo-400 prose-code:before:content-none prose-code:after:content-none prose-code:font-mono prose-code:text-xs">
+                <div className="markdown-body prose prose-sm dark:prose-invert max-w-none prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-code:text-gray-600 dark:prose-code:text-gray-400 prose-code:before:content-none prose-code:after:content-none prose-code:font-mono prose-code:text-xs">
                   <ReactMarkdown>{msg.text}</ReactMarkdown>
                 </div>
               )}
 
               {/* 스트리밍 커서 */}
               {isStreaming && !isUser && (
-                <span className="inline-block w-0.5 h-4 bg-indigo-500 animate-pulse ml-0.5 align-text-bottom" />
+                <span className="inline-block w-0.5 h-4 bg-gray-500 animate-pulse ml-0.5 align-text-bottom" />
               )}
 
               {/* 기능 버튼 */}
@@ -1407,7 +1481,7 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
                     onClick={() => onCopy(msg.text, msg.id)}
                     className={`p-1.5 rounded-lg transition text-xs flex items-center gap-1 ${
                       isCopied
-                        ? "text-green-500 bg-green-50 dark:bg-green-900/30"
+                        ? "text-green-400 bg-green-50 dark:bg-green-800/30"
                         : "text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
                     }`}
                     title="복사"
@@ -1416,7 +1490,7 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
                   </button>
                   <button
                     onClick={onRegenerate}
-                    className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition"
+                    className="p-1.5 text-gray-400 hover:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-900/30 rounded-lg transition"
                     title="재생성"
                   >
                     <RotateCw size={12} />
@@ -1426,8 +1500,8 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
                     onClick={() => msg.onFeedback && msg.onFeedback(true)}
                     className={`p-1.5 rounded-lg transition ${
                       msg.feedback?.is_positive === true
-                        ? "text-green-600 bg-green-50 dark:bg-green-900/30"
-                        : "text-gray-400 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-900/30"
+                        ? "text-green-500 bg-green-50 dark:bg-green-800/30"
+                        : "text-gray-400 hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-800/30"
                     }`}
                     title="좋아요"
                   >

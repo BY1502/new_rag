@@ -24,6 +24,7 @@ class Agent(Base):
     system_prompt = Column(Text, default="")
     icon = Column(String(50), default="")
     color = Column(String(20), default="")
+    agent_type = Column(String(50), default="custom", server_default="custom")
     published = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

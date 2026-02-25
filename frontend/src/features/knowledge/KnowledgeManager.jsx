@@ -135,18 +135,18 @@ export default function KnowledgeManager() {
       <div className="space-y-4">
         <div>
           <label className="block text-xs font-semibold text-gray-700 mb-1.5">이름</label>
-          <input type="text" value={kbForm.name} onChange={e => setKbForm({...kbForm, name: e.target.value})} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white" placeholder="지식 베이스 이름"/>
+          <input type="text" value={kbForm.name} onChange={e => setKbForm({...kbForm, name: e.target.value})} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 bg-white" placeholder="지식 베이스 이름"/>
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-700 mb-1.5">설명</label>
-          <textarea value={kbForm.description} onChange={e => setKbForm({...kbForm, description: e.target.value})} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white resize-none h-20" placeholder="지식 베이스 설명"/>
+          <textarea value={kbForm.description} onChange={e => setKbForm({...kbForm, description: e.target.value})} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 bg-white resize-none h-20" placeholder="지식 베이스 설명"/>
         </div>
       </div>
       <div className="border-t border-gray-200 pt-5 space-y-4">
         <label className="block text-sm font-bold text-gray-900 flex items-center gap-2"><Sliders size={15}/> 청킹 전략</label>
         <div className="grid grid-cols-2 gap-3">
-          <div onClick={() => setKbForm({...kbForm, chunkingMethod: 'fixed'})} className={`p-4 border-2 rounded-lg cursor-pointer transition-all flex flex-col items-center gap-2 text-center ${kbForm.chunkingMethod === 'fixed' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400 bg-white'}`}>
-            <div className={`p-2 rounded-lg ${kbForm.chunkingMethod === 'fixed' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+          <div onClick={() => setKbForm({...kbForm, chunkingMethod: 'fixed'})} className={`p-4 border-2 rounded-lg cursor-pointer transition-all flex flex-col items-center gap-2 text-center ${kbForm.chunkingMethod === 'fixed' ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-gray-400 bg-white'}`}>
+            <div className={`p-2 rounded-lg ${kbForm.chunkingMethod === 'fixed' ? 'bg-gray-100 text-gray-600' : 'bg-gray-100 text-gray-500'}`}>
               <AlignJustify size={18}/>
             </div>
             <div>
@@ -170,16 +170,16 @@ export default function KnowledgeManager() {
               <div>
                 <div className="flex justify-between mb-1.5">
                   <label className="text-xs font-semibold text-gray-700">Chunk Size (Token)</label>
-                  <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">{kbForm.chunkSize}</span>
+                  <span className="text-xs font-mono bg-gray-50 text-gray-700 px-2 py-0.5 rounded border border-gray-200">{kbForm.chunkSize}</span>
                 </div>
-                <input type="range" min="128" max="2048" step="128" value={kbForm.chunkSize} onChange={e => setKbForm({...kbForm, chunkSize: Number(e.target.value)})} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"/>
+                <input type="range" min="128" max="2048" step="128" value={kbForm.chunkSize} onChange={e => setKbForm({...kbForm, chunkSize: Number(e.target.value)})} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-500"/>
               </div>
               <div>
                 <div className="flex justify-between mb-1.5">
                   <label className="text-xs font-semibold text-gray-700">Chunk Overlap</label>
-                  <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">{kbForm.chunkOverlap}</span>
+                  <span className="text-xs font-mono bg-gray-50 text-gray-700 px-2 py-0.5 rounded border border-gray-200">{kbForm.chunkOverlap}</span>
                 </div>
-                <input type="range" min="0" max="200" step="10" value={kbForm.chunkOverlap} onChange={e => setKbForm({...kbForm, chunkOverlap: Number(e.target.value)})} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"/>
+                <input type="range" min="0" max="200" step="10" value={kbForm.chunkOverlap} onChange={e => setKbForm({...kbForm, chunkOverlap: Number(e.target.value)})} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-500"/>
               </div>
             </>
           ) : (
@@ -209,7 +209,7 @@ export default function KnowledgeManager() {
           <label className="block text-sm font-bold text-gray-900 flex items-center gap-2"><Server size={15}/> 벡터 DB 설정</label>
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5">Qdrant 서비스</label>
-            <select value={kbForm.externalServiceId} onChange={e => setKbForm({...kbForm, externalServiceId: e.target.value})} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white cursor-pointer">
+            <select value={kbForm.externalServiceId} onChange={e => setKbForm({...kbForm, externalServiceId: e.target.value})} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 bg-white cursor-pointer">
               <option value="">기본 (로컬 Qdrant)</option>
               {qdrantServices.map(svc => (<option key={svc.service_id} value={svc.service_id}>{svc.name} ({svc.url})</option>))}
             </select>
@@ -228,7 +228,7 @@ export default function KnowledgeManager() {
             <h2 className="text-3xl font-bold text-gray-900 mb-2">지식 베이스</h2>
             <p className="text-gray-600">AI가 학습하고 참조할 문서 저장소들을 관리합니다.</p>
           </div>
-          <button onClick={openCreateModal} className="flex items-center gap-2 px-5 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors shadow-sm">
+          <button onClick={openCreateModal} className="flex items-center gap-2 px-5 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold transition-colors shadow-sm">
             <Plus size={20} />
             <span>새 지식 베이스</span>
           </button>
@@ -238,35 +238,35 @@ export default function KnowledgeManager() {
             <div
               key={kb.id}
               onClick={() => handleSelectKb(kb.id)}
-              className={`group bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-green-300 hover-lift cursor-pointer flex flex-col h-56 animate-scaleIn animate-stagger-${Math.min(idx % 4 + 1, 4)}`}
+              className={`group bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-green-200 hover-lift cursor-pointer flex flex-col h-56 animate-scaleIn animate-stagger-${Math.min(idx % 4 + 1, 4)}`}
             >
               <div className="flex items-start justify-between mb-4">
-                <div className="p-3 bg-green-50 text-green-600 rounded-lg group-hover:bg-green-100 group-hover:scale-110 transition-all">
+                <div className="p-3 bg-green-50 text-green-500 rounded-lg group-hover:bg-green-50 group-hover:scale-110 transition-all">
                   <Database size={22} className="group-hover:rotate-6 transition-transform" />
                 </div>
                 {kb.config?.chunkingMethod === 'semantic' && (
                   <span className="text-[10px] font-semibold px-2 py-1 bg-purple-50 text-purple-700 rounded-full border border-purple-200 animate-fadeIn">Semantic</span>
                 )}
               </div>
-              <h3 className="text-base font-bold text-gray-900 mb-2 group-hover:text-green-600 transition-colors">{kb.name}</h3>
+              <h3 className="text-base font-bold text-gray-900 mb-2 group-hover:text-green-500 transition-colors">{kb.name}</h3>
               <p className="text-sm text-gray-600 line-clamp-2 mb-4 flex-1">{kb.description || '설명이 없습니다.'}</p>
               <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
                 <div className="flex items-center gap-3">
-                  <span className="flex items-center gap-1 hover:text-blue-600 transition-colors"><FileText size={11}/> {kbStats[kb.id]?.file_count ?? kb.files.length}</span>
+                  <span className="flex items-center gap-1 hover:text-gray-600 transition-colors"><FileText size={11}/> {kbStats[kb.id]?.file_count ?? kb.files.length}</span>
                   <span className="flex items-center gap-1 hover:text-purple-600 transition-colors"><Layers size={11}/> {kbStats[kb.id]?.chunk_count ?? '—'}</span>
-                  <span className="flex items-center gap-1 hover:text-green-600 transition-colors"><Network size={11}/> {kbStats[kb.id]?.graph_node_count ?? '—'}</span>
+                  <span className="flex items-center gap-1 hover:text-green-500 transition-colors"><Network size={11}/> {kbStats[kb.id]?.graph_node_count ?? '—'}</span>
                 </div>
               </div>
             </div>
           ))}
-          <button onClick={openCreateModal} className="group border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-green-400 hover:text-green-600 hover:bg-green-50 hover-lift h-56 gap-3 animate-scaleIn">
-            <div className="p-3 bg-gray-100 group-hover:bg-green-100 rounded-full group-hover:scale-110 transition-all">
+          <button onClick={openCreateModal} className="group border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-green-300 hover:text-green-500 hover:bg-green-50 hover-lift h-56 gap-3 animate-scaleIn">
+            <div className="p-3 bg-gray-100 group-hover:bg-green-50 rounded-full group-hover:scale-110 transition-all">
               <Plus size={24} className="group-hover:rotate-90 transition-transform"/>
             </div>
             <span className="font-semibold">새 지식 베이스</span>
           </button>
         </div>
-        <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="새 지식 베이스 생성"><div className="p-6">{renderConfigForm()}<div className="mt-8 flex justify-end gap-3"><button onClick={() => setIsCreateOpen(false)} className="px-5 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">취소</button><button onClick={() => handleSaveKb(true)} className="px-5 py-2.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors shadow-sm">생성하기</button></div></div></Modal>
+        <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="새 지식 베이스 생성"><div className="p-6">{renderConfigForm()}<div className="mt-8 flex justify-end gap-3"><button onClick={() => setIsCreateOpen(false)} className="px-5 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">취소</button><button onClick={() => handleSaveKb(true)} className="px-5 py-2.5 text-sm font-semibold text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors shadow-sm">생성하기</button></div></div></Modal>
       </div>
     );
   }
@@ -299,7 +299,7 @@ export default function KnowledgeManager() {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
-            <button onClick={() => setActiveTab('files')} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'files' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+            <button onClick={() => setActiveTab('files')} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'files' ? 'bg-white text-gray-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
               <FileText size={15}/> 목록
             </button>
             <button onClick={() => setActiveTab('chunks')} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'chunks' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
@@ -321,7 +321,7 @@ export default function KnowledgeManager() {
               <div className="flex items-center gap-2">
                 <input type="file" multiple className="hidden" ref={fileInputRef} onChange={(e) => handleFiles(Array.from(e.target.files))}/>
                 <input type="file" multiple webkitdirectory="" className="hidden" ref={folderInputRef} onChange={(e) => handleFiles(Array.from(e.target.files))}/>
-                <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">
+                <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">
                   <Upload size={15}/> 파일 업로드
                 </button>
                 <button onClick={() => folderInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium transition-colors shadow-sm">
@@ -330,14 +330,14 @@ export default function KnowledgeManager() {
               </div>
               <div className="relative w-64">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                <input type="text" placeholder="문서 검색..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"/>
+                <input type="text" placeholder="문서 검색..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-green-400 outline-none bg-white"/>
               </div>
             </div>
-            <div className={`flex-1 overflow-y-auto p-4 transition-colors ${isUploadDragging ? 'bg-blue-50' : 'bg-white'}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+            <div className={`flex-1 overflow-y-auto p-4 transition-colors ${isUploadDragging ? 'bg-gray-50' : 'bg-white'}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
               {currentFiles.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-300 rounded-xl m-4">
-                  <div className="w-20 h-20 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
-                    <Upload size={36} className="text-blue-500"/>
+                  <div className="w-20 h-20 bg-gray-50 rounded-xl flex items-center justify-center mb-4">
+                    <Upload size={36} className="text-gray-500"/>
                   </div>
                   <h3 className="text-base font-bold text-gray-700 mb-2">문서를 업로드하세요</h3>
                   <p className="text-sm text-center text-gray-500 mb-1">PDF, DOCX, TXT, MD, PPTX, XLSX, JPG, PNG 파일을</p>
@@ -380,9 +380,9 @@ export default function KnowledgeManager() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        {file.status === 'ready' && <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-200"><CheckCircle size={11}/> 완료</span>}
+                        {file.status === 'ready' && <span className="flex items-center gap-1.5 text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full border border-green-100"><CheckCircle size={11}/> 완료</span>}
                         {file.status === 'uploading' && <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200"><Loader2 size={11} className="animate-spin"/> 업로드 중</span>}
-                        {file.status === 'processing' && <span className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200"><Loader2 size={11} className="animate-spin"/> 처리 중</span>}
+                        {file.status === 'processing' && <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-200"><Loader2 size={11} className="animate-spin"/> 처리 중</span>}
                         {file.status === 'error' && <span className="flex items-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 px-2.5 py-1 rounded-full border border-red-200 cursor-help" title={file.errorMessage || '업로드 실패'}><AlertCircle size={11}/> 실패</span>}
                         <button onClick={() => handleDeleteFile(file)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg hover:scale-110 active:scale-95 transition-all opacity-0 group-hover:opacity-100">
                           <Trash2 size={16}/>
@@ -408,7 +408,7 @@ export default function KnowledgeManager() {
             </button>
             <div className="flex gap-3">
               <button onClick={() => setIsConfigOpen(false)} className="px-5 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">취소</button>
-              <button onClick={() => handleSaveKb(false)} className="px-5 py-2.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors shadow-sm">저장하기</button>
+              <button onClick={() => handleSaveKb(false)} className="px-5 py-2.5 text-sm font-semibold text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors shadow-sm">저장하기</button>
             </div>
           </div>
         </div>
@@ -721,7 +721,7 @@ function InteractiveGraphView({ kbId }) {
         <Network size={48} className="text-gray-600 mb-4" />
         <p className="font-bold text-lg mb-2">그래프 데이터가 없습니다</p>
         <p className="text-sm text-gray-400 text-center mb-4">문서를 업로드하면 자동으로<br/>지식 그래프가 생성됩니다.</p>
-        <button onClick={() => setShowNodeForm(true)} className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-bold flex items-center gap-2">
+        <button onClick={() => setShowNodeForm(true)} className="px-4 py-2 bg-green-500 hover:bg-green-600 rounded-lg text-sm font-bold flex items-center gap-2">
           <Plus size={14} /> 노드 직접 추가
         </button>
       </div>
@@ -757,20 +757,20 @@ function InteractiveGraphView({ kbId }) {
 
       {/* 컨트롤 */}
       <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
-        <button onClick={fetchGraph} className="p-2 bg-black/60 backdrop-blur-md text-white rounded-lg border border-gray-700 hover:bg-gray-700 transition" title="새로고침">
+        <button onClick={fetchGraph} className="p-2 bg-black/60 backdrop-blur-md text-white rounded-lg border border-gray-700 hover:bg-green-600 transition" title="새로고침">
           <RefreshCw size={16} />
         </button>
-        <button onClick={() => setZoom(z => Math.min(3, z + 0.2))} className="p-2 bg-black/60 backdrop-blur-md text-white rounded-lg border border-gray-700 hover:bg-gray-700 transition" title="확대">
+        <button onClick={() => setZoom(z => Math.min(3, z + 0.2))} className="p-2 bg-black/60 backdrop-blur-md text-white rounded-lg border border-gray-700 hover:bg-green-600 transition" title="확대">
           <Plus size={16} />
         </button>
-        <button onClick={() => setZoom(z => Math.max(0.3, z - 0.2))} className="p-2 bg-black/60 backdrop-blur-md text-white rounded-lg border border-gray-700 hover:bg-gray-700 transition" title="축소">
+        <button onClick={() => setZoom(z => Math.max(0.3, z - 0.2))} className="p-2 bg-black/60 backdrop-blur-md text-white rounded-lg border border-gray-700 hover:bg-green-600 transition" title="축소">
           <span className="block w-4 h-4 text-center leading-4 font-bold">-</span>
         </button>
-        <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="p-2 bg-black/60 backdrop-blur-md text-white rounded-lg border border-gray-700 hover:bg-gray-700 transition text-[10px] font-bold" title="리셋">
+        <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="p-2 bg-black/60 backdrop-blur-md text-white rounded-lg border border-gray-700 hover:bg-green-600 transition text-[10px] font-bold" title="리셋">
           1:1
         </button>
         <div className="border-t border-gray-700 my-1" />
-        <button onClick={() => { setShowNodeForm(true); setSelectedNode(null); setSelectedEdge(null); }} className="p-2 bg-green-600/80 backdrop-blur-md text-white rounded-lg border border-green-500 hover:bg-green-600 transition" title="노드 추가">
+        <button onClick={() => { setShowNodeForm(true); setSelectedNode(null); setSelectedEdge(null); }} className="p-2 bg-green-500/80 backdrop-blur-md text-white rounded-lg border border-green-400 hover:bg-green-500 transition" title="노드 추가">
           <Plus size={16} />
         </button>
         <button onClick={() => { setEdgeMode('selectSource'); setEdgeSource(null); setSelectedNode(null); setSelectedEdge(null); }} className={`p-2 backdrop-blur-md text-white rounded-lg border transition ${edgeMode ? 'bg-orange-600 border-orange-500' : 'bg-orange-600/60 border-orange-500/50 hover:bg-orange-600'}`} title="엣지 추가">
@@ -823,21 +823,21 @@ function InteractiveGraphView({ kbId }) {
 
       {/* 노드 생성 폼 */}
       {showNodeForm && (
-        <div className="absolute right-4 top-[220px] z-20 w-72 bg-black/80 backdrop-blur-md rounded-xl border border-green-600 p-4 text-white">
+        <div className="absolute right-4 top-[220px] z-20 w-72 bg-black/80 backdrop-blur-md rounded-xl border border-green-500 p-4 text-white">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-bold text-green-400">노드 추가</span>
+            <span className="text-sm font-bold text-green-300">노드 추가</span>
             <button onClick={() => setShowNodeForm(false)} className="text-gray-400 hover:text-white"><span className="text-lg leading-none">&times;</span></button>
           </div>
-          <select value={nodeForm.label} onChange={e => setNodeForm({...nodeForm, label: e.target.value})} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white mb-2 outline-none focus:border-green-500">
+          <select value={nodeForm.label} onChange={e => setNodeForm({...nodeForm, label: e.target.value})} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white mb-2 outline-none focus:border-green-400">
             {ALLOWED_LABELS.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
-          <input value={nodeForm.name} onChange={e => setNodeForm({...nodeForm, name: e.target.value})} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white mb-2 outline-none focus:border-green-500" placeholder="노드 이름" />
+          <input value={nodeForm.name} onChange={e => setNodeForm({...nodeForm, name: e.target.value})} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white mb-2 outline-none focus:border-green-400" placeholder="노드 이름" />
           <div className="mb-2">
             <div className="text-[10px] text-gray-400 uppercase font-bold mb-1">속성 추가</div>
             <div className="flex gap-1">
               <input value={newPropKey} onChange={e => setNewPropKey(e.target.value)} className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white outline-none" placeholder="키" />
               <input value={newPropVal} onChange={e => setNewPropVal(e.target.value)} className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white outline-none" placeholder="값" />
-              <button onClick={() => { if (newPropKey.trim()) { setNodeForm({...nodeForm, properties: {...nodeForm.properties, [newPropKey]: newPropVal}}); setNewPropKey(''); setNewPropVal(''); } }} className="px-2 py-1 bg-gray-700 text-white rounded text-xs hover:bg-gray-600">+</button>
+              <button onClick={() => { if (newPropKey.trim()) { setNodeForm({...nodeForm, properties: {...nodeForm.properties, [newPropKey]: newPropVal}}); setNewPropKey(''); setNewPropVal(''); } }} className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-500">+</button>
             </div>
             {Object.entries(nodeForm.properties).map(([k, v]) => (
               <div key={k} className="flex items-center gap-1 mt-1 text-xs text-gray-300">
@@ -846,7 +846,7 @@ function InteractiveGraphView({ kbId }) {
               </div>
             ))}
           </div>
-          <button onClick={handleCreateNode} disabled={actionLoading || !nodeForm.name.trim()} className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-xs font-bold transition disabled:opacity-50">
+          <button onClick={handleCreateNode} disabled={actionLoading || !nodeForm.name.trim()} className="w-full px-3 py-2 bg-green-500 hover:bg-green-600 rounded-lg text-xs font-bold transition disabled:opacity-50">
             {actionLoading ? '생성 중...' : '노드 생성'}
           </button>
         </div>

@@ -14,6 +14,7 @@ class AgentCreate(BaseModel):
     system_prompt: str = Field("", max_length=10000)
     icon: str = Field("", max_length=50)
     color: str = Field("", max_length=20)
+    agent_type: str = Field("custom", max_length=50)
     published: bool = True
 
 
@@ -24,6 +25,7 @@ class AgentUpdate(BaseModel):
     system_prompt: Optional[str] = Field(None, max_length=10000)
     icon: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=20)
+    agent_type: Optional[str] = Field(None, max_length=50)
     published: Optional[bool] = None
     sort_order: Optional[int] = None
 
@@ -37,6 +39,7 @@ class AgentResponse(BaseModel):
     system_prompt: str
     icon: str
     color: str
+    agent_type: str
     published: bool
     sort_order: int
     created_at: datetime

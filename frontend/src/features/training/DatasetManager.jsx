@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { feedbackAPI, datasetAPI, finetuningAPI } from "../../api/client";
 import { ThumbsUp, ThumbsDown, Database, Trash2, Plus, Loader2, RefreshCw, Upload, Zap } from "../../components/ui/Icon";
 
@@ -10,6 +11,7 @@ const FORMAT_OPTIONS = [
 ];
 
 export default function DatasetManager() {
+  const navigate = useNavigate();
   const [feedbacks, setFeedbacks] = useState([]);
   const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -135,7 +137,7 @@ export default function DatasetManager() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <Loader2 className="animate-spin text-indigo-600" size={32} />
+        <Loader2 className="animate-spin text-green-500" size={32} />
       </div>
     );
   }
@@ -143,6 +145,23 @@ export default function DatasetManager() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
       <div className="max-w-7xl mx-auto space-y-6">
+        {/* 탭 네비게이션 */}
+        <div className="flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
+          <button
+            className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-green-500 text-white shadow-sm"
+          >
+            <Database size={16} className="inline mr-2" />
+            학습 데이터
+          </button>
+          <button
+            onClick={() => navigate('/finetuning')}
+            className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+          >
+            <Zap size={16} className="inline mr-2" />
+            파인튜닝 모니터
+          </button>
+        </div>
+
         {/* 헤더 */}
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">학습 데이터 관리</h1>
@@ -156,11 +175,11 @@ export default function DatasetManager() {
           </div>
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
             <div className="text-sm text-gray-500 dark:text-gray-400">긍정 평가</div>
-            <div className="text-3xl font-bold text-green-600 dark:text-green-400 mt-1">{stats.has_positive}</div>
+            <div className="text-3xl font-bold text-gray-600 dark:text-gray-400 mt-1">{stats.has_positive}</div>
           </div>
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
             <div className="text-sm text-gray-500 dark:text-gray-400">평균 별점</div>
-            <div className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">
+            <div className="text-3xl font-bold text-gray-600 dark:text-gray-400 mt-1">
               {stats.avg_rating ? stats.avg_rating.toFixed(1) : "N/A"}
             </div>
           </div>
@@ -174,7 +193,7 @@ export default function DatasetManager() {
             </h2>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+              className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
             >
               <Plus size={16} /> 새 데이터셋
             </button>
@@ -194,7 +213,7 @@ export default function DatasetManager() {
                       {ds.format_type && (
                         <span className={`px-1.5 py-0.5 text-xs rounded font-medium ${
                           ds.format_type === "tool_calling"
-                            ? "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
+                            ? "bg-gray-100 text-gray-700 dark:bg-gray-900/40 dark:text-gray-300"
                             : "bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300"
                         }`}>
                           {ds.format_type}
@@ -203,27 +222,27 @@ export default function DatasetManager() {
                     </div>
                     <div className="text-sm text-gray-500 dark:text-gray-400">
                       {ds.total_examples}개 예제 | {ds.verified_examples}개 검증됨
-                      {ds.is_exported && <span className="ml-2 text-green-600">내보내기 완료</span>}
+                      {ds.is_exported && <span className="ml-2 text-gray-600 dark:text-gray-400">내보내기 완료</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleBuildDataset(ds.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition"
                       title="데이터셋 빌드 (긍정 평가 수집)"
                     >
                       <RefreshCw size={14} /> 빌드
                     </button>
                     <button
                       onClick={() => { setExportFormat(ds.format_type || "chat"); setShowExportModal(ds.id); }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-400 text-white text-sm rounded-lg hover:bg-green-500 transition"
                       title="JSONL 내보내기"
                     >
                       <Upload size={14} /> 내보내기
                     </button>
                     <button
                       onClick={() => handleStartFineTuning(ds.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700 transition"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition"
                       title="파인튜닝 시작"
                     >
                       <Zap size={14} /> 파인튜닝
@@ -256,13 +275,13 @@ export default function DatasetManager() {
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {fb.is_positive === true && <ThumbsUp size={14} className="text-green-600" />}
-                        {fb.is_positive === false && <ThumbsDown size={14} className="text-red-600" />}
+                        {fb.is_positive === true && <ThumbsUp size={14} className="text-gray-600" />}
+                        {fb.is_positive === false && <ThumbsDown size={14} className="text-red-500" />}
                         {fb.rating && (
-                          <span className="text-xs text-yellow-600 dark:text-yellow-400">{fb.rating}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">{fb.rating}</span>
                         )}
                         {toolCalls && toolCalls.length > 0 && (
-                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded text-xs">
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 rounded text-xs">
                             {toolCalls.map(tc => tc.name).filter((v, i, a) => a.indexOf(v) === i).join(", ")}
                           </span>
                         )}
@@ -318,12 +337,12 @@ export default function DatasetManager() {
                       onClick={() => setNewDataset(prev => ({ ...prev, format_type: opt.value }))}
                       className={`p-3 rounded-lg border text-left transition ${
                         newDataset.format_type === opt.value
-                          ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30"
+                          ? "border-green-400 bg-green-50 dark:bg-green-900/20"
                           : "border-gray-200 dark:border-gray-600 hover:border-gray-300"
                       }`}
                     >
                       <div className={`text-sm font-medium ${
-                        newDataset.format_type === opt.value ? "text-indigo-700 dark:text-indigo-300" : "text-gray-900 dark:text-white"
+                        newDataset.format_type === opt.value ? "text-gray-700 dark:text-gray-300" : "text-gray-900 dark:text-white"
                       }`}>{opt.label}</div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">{opt.desc}</div>
                     </button>
@@ -341,7 +360,7 @@ export default function DatasetManager() {
               <button
                 onClick={handleCreateDataset}
                 disabled={!newDataset.name.trim()}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50"
+                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition disabled:opacity-50"
               >
                 생성
               </button>
@@ -362,12 +381,12 @@ export default function DatasetManager() {
                   onClick={() => setExportFormat(opt.value)}
                   className={`w-full p-3 rounded-lg border text-left transition ${
                     exportFormat === opt.value
-                      ? "border-green-500 bg-green-50 dark:bg-green-900/30"
+                      ? "border-green-400 bg-green-50 dark:bg-green-900/20"
                       : "border-gray-200 dark:border-gray-600 hover:border-gray-300"
                   }`}
                 >
                   <div className={`text-sm font-medium ${
-                    exportFormat === opt.value ? "text-green-700 dark:text-green-300" : "text-gray-900 dark:text-white"
+                    exportFormat === opt.value ? "text-gray-700 dark:text-gray-300" : "text-gray-900 dark:text-white"
                   }`}>{opt.label}</div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">{opt.desc}</div>
                 </button>
@@ -382,7 +401,7 @@ export default function DatasetManager() {
               </button>
               <button
                 onClick={() => handleExportDataset(showExportModal)}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
               >
                 다운로드
               </button>

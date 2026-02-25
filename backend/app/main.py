@@ -62,7 +62,10 @@ async def lifespan(app: FastAPI):
             await conn.execute(text(
                 "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS custom_model VARCHAR(200)"
             ))
-        logger.info("DB migration: dense_weight, tool_calls_json, schema_metadata, custom_model columns ensured")
+            await conn.execute(text(
+                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS agent_type VARCHAR(50) DEFAULT 'custom'"
+            ))
+        logger.info("DB migration: dense_weight, tool_calls_json, schema_metadata, custom_model, agent_type columns ensured")
     except Exception as e:
         logger.warning(f"DB auto-migration skipped: {e}")
 

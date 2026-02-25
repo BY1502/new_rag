@@ -281,9 +281,7 @@ class RAGService:
             search_mode: 검색 모드 (dense, sparse, hybrid)
         """
         try:
-            import time as _time
             effective_top_k = top_k or self.default_top_k
-            tool_calls_log = []  # 도구 호출 기록 (파인튜닝 데이터용)
 
             # 1. 모델 결정 (프론트 요청 > 사용자 커스텀 모델 > 환경변수)
             target_model = model  # 프론트에서 명시적 선택
@@ -304,187 +302,32 @@ class RAGService:
             llm = await self._get_llm_instance(target_model, user_id, db)
             logger.info(f"[RAG] LLM instance: {type(llm).__name__}")
 
-            # 2. MCP 도구 컨텍스트 수집
-            tool_context = ""
-            if active_mcp_ids:
-                _t0 = _time.time()
-                tool_context = await self._execute_mcp_tools(message, active_mcp_ids, use_deep_think, user_id, db)
-                if tool_context:
-                    tool_calls_log.append({
-                        "name": "mcp_tools",
-                        "input": {"message": message, "mcp_ids": active_mcp_ids},
-                        "output": tool_context[:1000],
-                        "duration_ms": int((_time.time() - _t0) * 1000),
-                    })
-                if use_deep_think and tool_context:
-                    yield json.dumps({
-                        "type": "thinking",
-                        "thinking": "MCP 도구 실행 결과를 답변에 반영합니다."
-                    }) + "\n"
-
-            # 3. 질문 의도 분석 (Router) — 복수 도구 리스트 반환
-            tools = await self._analyze_intent(message, llm, use_web_search, use_deep_think)
-            logger.info(f"[RAG] tools={tools}")
-
-            # Deep Think 모드일 때 분석 결과 전송
-            if use_deep_think:
-                tools_label = " + ".join(tools)
-                yield json.dumps({
-                    "type": "thinking",
-                    "thinking": f"분석 결과: [{tools_label}] 도구 실행 계획 수립"
-                }) + "\n"
-
-            # 4. 라우팅에 따른 처리
-            # --- [MODE 1] xLAM Process (단독 실행) ---
-            if tools == ["process"]:
-                yield json.dumps({
-                    "type": "thinking",
-                    "thinking": "xLAM 자율 에이전트 모드로 전환합니다."
-                }) + "\n"
-                from app.services.xlam_service import get_xlam_service
-                xlam_service = get_xlam_service()
-                xlam_llm = await self._get_llm_instance(target_model, user_id, db)
-                async for chunk in xlam_service.run_pipeline(message, kb_ids[0], user_id, db=db, llm_instance=xlam_llm):
-                    yield chunk
-                return
-
-            # --- [MODE 4] Text-to-SQL (단독 실행) ---
-            if use_sql and db_connection_id:
-                logger.info(f"[T2SQL] mode activated: conn={db_connection_id}, model={target_model}")
-                yield json.dumps({
-                    "type": "thinking",
-                    "thinking": "Text-to-SQL 모드로 전환합니다."
-                }) + "\n"
-                from app.services.t2sql_service import get_t2sql_service
-                from app.api.endpoints.settings import get_db_connection_for_user, _build_connection_uri
-
-                conn = await get_db_connection_for_user(user_id, db_connection_id)
-                if not conn:
-                    yield json.dumps({
-                        "type": "content",
-                        "content": "데이터베이스 연결을 찾을 수 없습니다. 설정에서 DB 연결을 확인해주세요."
-                    }) + "\n"
-                    return
-
-                uri = _build_connection_uri(conn)
-                t2sql = get_t2sql_service()
-                t2sql_llm = await self._get_llm_instance(target_model, user_id, db)
-                logger.info(f"[T2SQL] LLM={type(t2sql_llm).__name__}, executing...")
-                async for chunk in t2sql.generate_and_execute(
-                    message, uri, model=target_model, llm_instance=t2sql_llm,
-                    schema_metadata=conn.get("schema_metadata"),
-                ):
-                    yield chunk
-                logger.info("[T2SQL] completed")
-                return
-
-            # 5. 멀티 도구 실행 루프 (web_search, rag 조합 가능)
-            all_context_parts = []
-
-            for tool_name in tools:
-                # --- Web Search ---
-                if tool_name == "web_search":
-                    provider = search_provider or "ddg"
-                    provider_labels = {"ddg": "DuckDuckGo", "serper": "Google Serper", "brave": "Brave Search", "tavily": "Tavily"}
-                    provider_label = provider_labels.get(provider, provider)
-
-                    yield json.dumps({
-                        "type": "thinking",
-                        "thinking": f"{provider_label} 웹 검색 중..."
-                    }) + "\n"
-
-                    _t0 = _time.time()
-                    web_ctx = await self._web_search(message, provider, user_id)
-                    tool_calls_log.append({
-                        "name": "web_search",
-                        "input": {"query": message, "provider": provider},
-                        "output": web_ctx[:1000],
-                        "duration_ms": int((_time.time() - _t0) * 1000),
-                    })
-
-                    if web_ctx.startswith("[Web Search Failed]"):
-                        yield json.dumps({
-                            "type": "thinking",
-                            "thinking": f"웹 검색 실패: {web_ctx.replace('[Web Search Failed] ', '')}"
-                        }) + "\n"
-                    elif web_ctx:
-                        all_context_parts.append(f"[Web Search Result]\n{web_ctx}")
-                        yield json.dumps({
-                            "type": "thinking",
-                            "thinking": f"{provider_label} 웹 검색 결과 수집 완료"
-                        }) + "\n"
-
-                # --- RAG ---
-                elif tool_name == "rag":
-                    kb_label = ", ".join(kb_ids) if len(kb_ids) <= 3 else f"{len(kb_ids)}개 KB"
-                    if use_deep_think:
-                        yield json.dumps({
-                            "type": "thinking",
-                            "thinking": f"지식 베이스({kb_label})에서 관련 문서를 탐색 중... (Top-{effective_top_k})"
-                        }) + "\n"
-
-                    _t0 = _time.time()
-                    rag_ctx = await self._retrieve_context(
-                        message, kb_ids, user_id,
-                        top_k=effective_top_k,
-                        use_rerank=use_rerank,
-                        search_mode=search_mode,
-                        dense_weight=dense_weight,
-                        use_multimodal_search=use_multimodal_search,
-                        db=db,
-                    )
-                    tool_calls_log.append({
-                        "name": "vector_retrieval",
-                        "input": {"query": message, "kb_ids": kb_ids, "top_k": effective_top_k,
-                                  "search_mode": search_mode, "use_rerank": use_rerank},
-                        "output": rag_ctx[:1000] if rag_ctx else "",
-                        "duration_ms": int((_time.time() - _t0) * 1000),
-                    })
-
-                    if rag_ctx:
-                        all_context_parts.append(rag_ctx)
-                        doc_count = rag_ctx.count("\n\n") + 1
-                        rerank_label = " (Reranked)" if use_rerank else ""
-                        graph_label = " + Graph" if "[Knowledge Graph Context]" in rag_ctx else ""
-                        if use_deep_think:
-                            yield json.dumps({
-                                "type": "thinking",
-                                "thinking": f"문서 {doc_count}개를 참조하여 답변 구성{rerank_label}{graph_label}"
-                            }) + "\n"
-                    elif use_deep_think:
-                        yield json.dumps({
-                            "type": "thinking",
-                            "thinking": "관련 문서를 찾지 못했습니다."
-                        }) + "\n"
-
-            # 컨텍스트 합산
-            context_text = "\n\n---\n\n".join(all_context_parts) if all_context_parts else ""
-
-            # MCP 도구 결과가 있으면 컨텍스트에 추가
-            if tool_context:
-                context_text = f"{context_text}\n\n[도구 실행 결과]\n{tool_context}" if context_text else f"[도구 실행 결과]\n{tool_context}"
-
-            # 6. 답변 생성
-            full_response = ""
-            async for chunk in self._generate_answer(
-                message, context_text, llm, system_prompt, history,
-                images=images, model=target_model
+            # 2. 멀티 에이전트 오케스트레이터에 위임
+            from app.services.orchestrator import run_orchestrator
+            async for chunk in run_orchestrator(
+                message=message,
+                kb_ids=kb_ids,
+                user_id=user_id,
+                llm=llm,
+                model=target_model,
+                system_prompt=system_prompt,
+                history=history,
+                use_deep_think=use_deep_think,
+                use_web_search=use_web_search,
+                top_k=effective_top_k,
+                use_rerank=use_rerank,
+                search_provider=search_provider,
+                search_mode=search_mode,
+                dense_weight=dense_weight,
+                images=images,
+                use_sql=use_sql,
+                db_connection_id=db_connection_id,
+                use_multimodal_search=use_multimodal_search,
+                active_mcp_ids=active_mcp_ids or [],
+                db=db,
             ):
-                full_response += chunk
-                yield json.dumps({"type": "content", "content": chunk}) + "\n"
-
-            # 7. 도구 호출 메타데이터 전송 (파인튜닝 데이터 수집용)
-            if tool_calls_log:
-                yield json.dumps({
-                    "type": "tool_calls_meta",
-                    "tool_calls": tool_calls_log,
-                    "intent": tools,
-                }) + "\n"
-
-            # 8. 자기 검증 (Deep Thinking ON일 때만)
-            if use_deep_think and len(full_response) > 50:
-                async for thinking in self._self_reflection(message, full_response, llm):
-                    yield thinking
+                yield chunk
+            return
 
         except Exception as e:
             logger.error(f"RAG generation error: {e}", exc_info=True)

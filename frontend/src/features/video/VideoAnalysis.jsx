@@ -62,8 +62,8 @@ export default function VideoAnalysis() {
                     <p className="text-gray-600">CCTV Stream Simulation</p>
                  </div>
                  {/* 바운딩 박스 데모 */}
-                 <div className="absolute top-1/3 left-1/4 w-32 h-48 border-2 border-green-500 rounded opacity-60">
-                    <span className="bg-green-500 text-white text-[10px] px-1 absolute -top-4 left-0">Worker #1</span>
+                 <div className="absolute top-1/3 left-1/4 w-32 h-48 border-2 border-green-400 rounded opacity-60">
+                    <span className="bg-green-400 text-white text-[10px] px-1 absolute -top-4 left-0">Worker #1</span>
                  </div>
               </div>
             ) : (
@@ -79,13 +79,13 @@ export default function VideoAnalysis() {
             <div className="flex items-center gap-4">
                <button 
                  onClick={() => setIsAnalyzing(!isAnalyzing)}
-                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition ${isAnalyzing ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition ${isAnalyzing ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-green-500 hover:bg-green-600 text-white'}`}
                >
                  {isAnalyzing ? <><Square size={16} fill="currentColor"/> 중지</> : <><Play size={16} fill="currentColor"/> 분석 시작</>}
                </button>
                <span className="text-white/70 text-sm font-mono">Camera_01: Main Gate</span>
             </div>
-            <div className="text-green-400 text-sm flex items-center gap-2">
+            <div className="text-green-300 text-sm flex items-center gap-2">
               <Activity size={16} /> System Optimal
             </div>
           </div>
@@ -96,7 +96,7 @@ export default function VideoAnalysis() {
       <div className="w-[350px] bg-white border-l border-gray-200 flex flex-col shrink-0">
         <div className="p-4 border-b bg-gray-50 pt-12"> {/* 상단 패딩 추가 (닫기 버튼 공간 확보) */}
           <h3 className="font-bold text-gray-800 flex items-center gap-2">
-            <Activity size={18} className="text-blue-600"/> 실시간 분석 로그
+            <Activity size={18} className="text-gray-600"/> 실시간 분석 로그
           </h3>
           <p className="text-xs text-gray-500 mt-1">LLM Vision Model Detection</p>
         </div>
@@ -108,7 +108,7 @@ export default function VideoAnalysis() {
           {logs.map((log) => (
             <div key={log.id} className={`p-3 rounded-lg border animate-in slide-in-from-right-5 fade-in duration-300 ${
               log.type === 'warning' ? 'bg-red-50 border-red-100 text-red-800' :
-              log.type === 'safe' ? 'bg-green-50 border-green-100 text-green-800' :
+              log.type === 'safe' ? 'bg-green-50 border-green-50 text-green-700' :
               'bg-gray-50 border-gray-100 text-gray-700'
             }`}>
               <div className="flex justify-between items-center mb-1">

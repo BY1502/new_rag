@@ -37,8 +37,8 @@ export default function MainLayout() {
     <div className="flex flex-col h-screen bg-gray-50 overflow-hidden font-sans">
       {/* Drag & Drop Overlay */}
       {isGlobalDragging && (
-        <div className="fixed inset-0 z-[100] bg-blue-50/95 flex flex-col items-center justify-center border-4 border-blue-500 border-dashed m-6 rounded-2xl animate-in fade-in duration-300 pointer-events-none">
-          <div className="w-24 h-24 bg-blue-500 rounded-2xl flex items-center justify-center shadow-lg animate-bounce">
+        <div className="fixed inset-0 z-[100] bg-gray-50/95 flex flex-col items-center justify-center border-4 border-green-400 border-dashed m-6 rounded-2xl animate-in fade-in duration-300 pointer-events-none">
+          <div className="w-24 h-24 bg-green-400 rounded-2xl flex items-center justify-center shadow-lg animate-bounce">
             <Upload size={40} className="text-white" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mt-6 mb-2">파일을 여기에 놓으세요</h2>
@@ -53,7 +53,7 @@ export default function MainLayout() {
           className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-all hover:scale-[1.02]"
           onClick={() => navigate('/home')}
         >
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-sm hover:scale-110 transition-transform">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shadow-sm hover:scale-110 transition-transform">
             <Sparkles size={22} className="text-white" />
           </div>
           <div>
@@ -114,7 +114,7 @@ export default function MainLayout() {
           {!isChatPage && (
             <button
               onClick={() => { createNewSession(); navigate('/chat'); }}
-              className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium text-sm transition-all hover:scale-105 active:scale-95 shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-green-400 hover:bg-green-500 text-white rounded-lg font-medium text-sm transition-all hover:scale-105 active:scale-95 shadow-sm"
             >
               <Plus size={16} />
               <span>새 대화</span>
@@ -123,7 +123,7 @@ export default function MainLayout() {
 
           {/* User Profile Dropdown */}
           <div className="flex items-center gap-2.5 px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer group">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-sm group-hover:scale-110 transition-transform">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold text-sm shadow-sm group-hover:scale-110 transition-transform">
               {user?.name?.[0].toUpperCase() || 'U'}
             </div>
             <div className="hidden md:block">
@@ -169,7 +169,7 @@ export default function MainLayout() {
             <div className="p-3 border-b border-gray-200">
               <button
                 onClick={() => { createNewSession(); }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium text-sm transition-all hover:scale-[1.02] active:scale-95 shadow-sm"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-400 hover:bg-green-500 text-white rounded-lg font-medium text-sm transition-all hover:scale-[1.02] active:scale-95 shadow-sm"
               >
                 <Plus size={18} />
                 <span>새 대화</span>
@@ -187,16 +187,16 @@ export default function MainLayout() {
                 sessions.map((session, idx) => (
                   <div key={session.id} className={`relative group animate-slideUp animate-stagger-${Math.min(idx % 4 + 1, 4)}`}>
                     {editingSessionId === session.id ? (
-                      <div className="flex items-center gap-1.5 px-3 py-2.5 bg-blue-50 rounded-lg border border-blue-300">
+                      <div className="flex items-center gap-1.5 px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-300">
                         <input
                           type="text"
                           value={editTitle}
                           onChange={(e) => setEditTitle(e.target.value)}
-                          className="flex-1 bg-white border border-gray-300 text-gray-900 text-sm outline-none min-w-0 px-2 py-1 rounded focus:ring-2 focus:ring-blue-500 transition-all"
+                          className="flex-1 bg-white border border-gray-300 text-gray-900 text-sm outline-none min-w-0 px-2 py-1 rounded focus:ring-2 focus:ring-green-400 transition-all"
                           autoFocus
                           onKeyDown={(e) => e.key === 'Enter' && saveEditing()}
                         />
-                        <button onClick={saveEditing} className="p-1 text-green-600 hover:text-green-700 hover:scale-110 transition-all">
+                        <button onClick={saveEditing} className="p-1 text-green-500 hover:text-green-600 hover:scale-110 transition-all">
                           <CheckCircle size={16}/>
                         </button>
                         <button onClick={cancelEditing} className="p-1 text-gray-400 hover:text-gray-600 hover:scale-110 transition-all">
@@ -208,17 +208,17 @@ export default function MainLayout() {
                         onClick={() => setCurrentSessionId(session.id)}
                         className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-all group/btn ${
                           currentSessionId === session.id
-                            ? 'bg-blue-50 text-blue-700 font-medium border border-blue-200'
+                            ? 'bg-gray-50 text-gray-700 font-medium border border-gray-200'
                             : 'text-gray-700 hover:bg-gray-100 hover:scale-[1.02]'
                         }`}
                       >
-                        <MessageSquare size={16} className={`${currentSessionId === session.id ? 'text-blue-600' : 'text-gray-400'} transition-all`} />
+                        <MessageSquare size={16} className={`${currentSessionId === session.id ? 'text-gray-600' : 'text-gray-400'} transition-all`} />
                         <span className="truncate flex-1 text-left">{session.title}</span>
 
                         <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-0.5 bg-white border border-gray-200 rounded-md p-0.5 shadow-sm">
                           <div
                             onClick={(e) => { e.stopPropagation(); startEditing(session); }}
-                            className="p-1.5 hover:text-blue-600 hover:bg-blue-50 rounded transition-all hover:scale-110 cursor-pointer"
+                            className="p-1.5 hover:text-gray-600 hover:bg-gray-50 rounded transition-all hover:scale-110 cursor-pointer"
                           >
                             <EditIcon size={13} />
                           </div>
@@ -269,11 +269,11 @@ function NavTab({ icon: Icon, label, active, onClick, badge }) {
       onClick={onClick}
       className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:scale-105 active:scale-95 ${
         active
-          ? 'bg-green-50 text-green-700 shadow-sm'
+          ? 'bg-green-50 text-green-600 shadow-sm'
           : 'text-gray-600 hover:bg-gray-100'
       }`}
     >
-      <Icon size={18} className={`${active ? 'text-green-600' : 'text-gray-400'} transition-transform`} />
+      <Icon size={18} className={`${active ? 'text-green-500' : 'text-gray-400'} transition-transform`} />
       <span className="hidden md:inline">{label}</span>
       {badge !== null && badge !== undefined && (
         <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-sm animate-pulse">

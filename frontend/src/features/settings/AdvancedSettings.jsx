@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../contexts/StoreContext';
-import { Settings, Cpu, Globe, Key, Info, Save, Layout, Database, Plug, Plus, Trash2, Link, Server, ArrowUp, ArrowDown, GripVertical, BookOpen, CheckCircle, Image, HardDrive, RefreshCw, Share2, Network, Zap, Moon, Sun } from '../../components/ui/Icon';
+import { Settings, Cpu, Globe, Key, Info, Save, Layout, Database, Plug, Plus, Trash2, Link, Server, ArrowUp, ArrowDown, GripVertical, BookOpen, CheckCircle, Image, HardDrive, RefreshCw, Share2, Network, Zap, Moon, Sun, FileText } from '../../components/ui/Icon';
 import { healthAPI, settingsAPI } from '../../api/client';
 
 export default function AdvancedSettings() {
@@ -45,6 +45,8 @@ export default function AdvancedSettings() {
   });
   const [dbTestStatus, setDbTestStatus] = useState({});
   const [dbTestDetail, setDbTestDetail] = useState({});
+  const [editingMetadataId, setEditingMetadataId] = useState(null);
+  const [metadataText, setMetadataText] = useState('');
 
   const loadOllamaModels = async () => {
     setOllamaModelsLoading(true);
@@ -231,13 +233,13 @@ export default function AdvancedSettings() {
         <nav className="space-y-1">
           {tabs.map(tab => (
             <div key={tab.id}>
-              <button onClick={() => setActiveTab(tab.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${activeTab === tab.id ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200'}`}>
-                <tab.icon size={18} className={activeTab === tab.id ? 'text-blue-600' : 'text-gray-400'} /> {tab.label}
+              <button onClick={() => setActiveTab(tab.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${activeTab === tab.id ? 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-400 shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200'}`}>
+                <tab.icon size={18} className={activeTab === tab.id ? 'text-gray-600' : 'text-gray-400'} /> {tab.label}
               </button>
               {tab.id === 'model' && activeTab === 'model' && (
                 <div className="ml-9 mt-1 space-y-1 border-l-2 border-gray-200 pl-2">
                   {[{ id: 'llm', label: 'LLM 모델' }, { id: 'embedding', label: '임베딩 모델' }, { id: 'multimodal', label: '멀티모달 모델' }].map(sub => (
-                    <button key={sub.id} onClick={() => setActiveModelTab(sub.id)} className={`block w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${activeModelTab === sub.id ? 'text-blue-600 font-bold bg-blue-50' : 'text-gray-500 hover:text-gray-800'}`}>{sub.label}</button>
+                    <button key={sub.id} onClick={() => setActiveModelTab(sub.id)} className={`block w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${activeModelTab === sub.id ? 'text-gray-600 font-bold bg-gray-50' : 'text-gray-500 hover:text-gray-800'}`}>{sub.label}</button>
                   ))}
                 </div>
               )}
@@ -249,7 +251,7 @@ export default function AdvancedSettings() {
       <main className="flex-1 flex flex-col min-w-0">
         <header className="px-8 py-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-white dark:bg-gray-900 shrink-0">
           <div><h2 className="text-xl font-bold text-gray-900 dark:text-white">{tabs.find(t => t.id === activeTab)?.label}</h2><p className="text-sm text-gray-500 dark:text-gray-400 mt-1">시스템의 전반적인 환경을 설정합니다.</p></div>
-          <button onClick={handleSave} className="flex items-center gap-2 px-5 py-2 bg-black dark:bg-blue-600 hover:bg-gray-800 dark:hover:bg-blue-700 text-white rounded-lg text-sm font-bold transition shadow-sm"><Save size={16}/> 저장하기</button>
+          <button onClick={handleSave} className="flex items-center gap-2 px-5 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-bold transition shadow-sm"><Save size={16}/> 저장하기</button>
         </header>
 
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
@@ -272,7 +274,7 @@ export default function AdvancedSettings() {
                   { name: 'claude-opus-4-6', desc: 'Claude Opus 4.6, 최강 추론' },
                   { name: 'claude-haiku-4-5-20251001', desc: 'Claude 4.5 Haiku, 빠르고 경제적' },
                 ]},
-                { id: 'google gemini', name: 'Google Gemini', color: 'blue', models: [
+                { id: 'google gemini', name: 'Google Gemini', color: 'gray', models: [
                   { name: 'gemini-2.0-flash', desc: '최신 Gemini, 빠른 응답' },
                   { name: 'gemini-2.0-pro', desc: '최고 성능 Gemini' },
                   { name: 'gemini-1.5-flash', desc: '100만 토큰 컨텍스트' },
@@ -287,12 +289,12 @@ export default function AdvancedSettings() {
                 apiKeys.some(k => k.provider.toLowerCase() === p.id) ||
                 backendApiKeys.some(bk => bk.provider === p.id)
               );
-              return <><div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-4 flex gap-3 text-sm text-blue-800 dark:text-blue-300 mb-6"><Info size={20} className="shrink-0"/><div>Ollama 로컬 모델 또는 API 키가 등록된 외부 모델 중 선택하여 대화에 사용할 수 있습니다.</div></div>
+              return <><div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-800 rounded-xl p-4 flex gap-3 text-sm text-gray-800 dark:text-gray-300 mb-6"><Info size={20} className="shrink-0"/><div>Ollama 로컬 모델 또는 API 키가 등록된 외부 모델 중 선택하여 대화에 사용할 수 있습니다.</div></div>
               {/* Ollama 로컬 모델 */}
               <section>
                 <div className="flex justify-between items-center mb-2">
                   <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2"><Server size={14}/> Ollama 로컬 모델</label>
-                  <button onClick={loadOllamaModels} disabled={ollamaModelsLoading} className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-bold flex items-center gap-1">
+                  <button onClick={loadOllamaModels} disabled={ollamaModelsLoading} className="text-xs text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300 font-bold flex items-center gap-1">
                     <RefreshCw size={12} className={ollamaModelsLoading ? 'animate-spin' : ''}/> {ollamaModelsLoading ? '불러오는 중...' : '새로고침'}
                   </button>
                 </div>
@@ -300,16 +302,16 @@ export default function AdvancedSettings() {
                 {ollamaModels.length > 0 ? (
                   <div className="space-y-2">
                     {ollamaModels.map(m => (
-                      <div key={m.name} onClick={() => setLocalConfig({...localConfig, llm: m.name})} className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all ${localConfig.llm === m.name ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/30 shadow-sm' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+                      <div key={m.name} onClick={() => setLocalConfig({...localConfig, llm: m.name})} className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all ${localConfig.llm === m.name ? 'border-green-400 bg-green-50/50 dark:bg-green-900/20 shadow-sm' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${localConfig.llm === m.name ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${localConfig.llm === m.name ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
                             <Cpu size={16}/>
                           </div>
                           <div>
-                            <div className={`font-bold text-sm ${localConfig.llm === m.name ? 'text-blue-900 dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'}`}>{m.name}</div>
+                            <div className={`font-bold text-sm ${localConfig.llm === m.name ? 'text-gray-900 dark:text-gray-300' : 'text-gray-800 dark:text-gray-200'}`}>{m.name}</div>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded text-blue-600 dark:text-blue-400 font-medium">로컬</span>
-                              {m.is_korean && <span className="text-[10px] bg-green-100 dark:bg-green-900/30 px-1.5 py-0.5 rounded text-green-600 dark:text-green-400 font-bold">한국어</span>}
+                              <span className="text-[10px] bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-400 font-medium">로컬</span>
+                              {m.is_korean && <span className="text-[10px] bg-green-50 dark:bg-green-800/30 px-1.5 py-0.5 rounded text-green-500 dark:text-green-300 font-bold">한국어</span>}
                               {m.parameter_size && <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-400">{m.parameter_size}</span>}
                               {m.family && <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-400">{m.family}</span>}
                               {m.quantization && <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-400">{m.quantization}</span>}
@@ -318,7 +320,7 @@ export default function AdvancedSettings() {
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-500 dark:text-gray-400">{m.size_gb} GB</span>
-                          {localConfig.llm === m.name && <CheckCircle size={18} className="text-blue-600"/>}
+                          {localConfig.llm === m.name && <CheckCircle size={18} className="text-green-500"/>}
                         </div>
                       </div>
                     ))}
@@ -326,7 +328,7 @@ export default function AdvancedSettings() {
                 ) : (
                   <div className="p-6 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl text-center">
                     {ollamaModelsLoading ? (
-                      <div className="flex flex-col items-center gap-2"><RefreshCw size={20} className="animate-spin text-gray-400"/><span className="text-sm text-gray-500 dark:text-gray-400">Ollama 모델 불러오는 중...</span></div>
+                      <div className="flex flex-col items-center gap-2"><RefreshCw size={20} className="animate-spin text-green-300"/><span className="text-sm text-gray-500 dark:text-gray-400">Ollama 모델 불러오는 중...</span></div>
                     ) : (
                       <div className="flex flex-col items-center gap-2"><Cpu size={20} className="text-gray-400"/><span className="text-sm text-gray-500 dark:text-gray-400">Ollama 모델 없음</span><span className="text-xs text-gray-400 dark:text-gray-500">Ollama 서버가 실행 중인지 확인하세요</span></div>
                     )}
@@ -343,7 +345,7 @@ export default function AdvancedSettings() {
                       <div key={provider.id}>
                         <div className="flex items-center gap-2 mb-2">
                           <span className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase">{provider.name}</span>
-                          <span className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded flex items-center gap-1"><CheckCircle size={8}/> 키 등록됨</span>
+                          <span className="text-[10px] bg-green-50 dark:bg-green-800/30 text-green-600 dark:text-green-300 px-1.5 py-0.5 rounded flex items-center gap-1"><CheckCircle size={8}/> 키 등록됨</span>
                         </div>
                         <div className="space-y-1.5">
                           {provider.models.map(m => (
@@ -355,7 +357,7 @@ export default function AdvancedSettings() {
                                 <div>
                                   <div className={`font-bold text-sm ${localConfig.llm === m.name ? 'text-purple-900 dark:text-purple-300' : 'text-gray-800 dark:text-gray-200'}`}>{m.name}</div>
                                   <div className="flex items-center gap-2 mt-0.5">
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${provider.color === 'green' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : provider.color === 'orange' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400' : provider.color === 'red' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>{provider.name}</span>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${provider.color === 'green' ? 'bg-green-50 dark:bg-green-800/30 text-green-500 dark:text-green-300' : provider.color === 'orange' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400' : provider.color === 'red' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-gray-100 dark:bg-gray-900/30 text-gray-600 dark:text-gray-400'}`}>{provider.name}</span>
                                     <span className="text-[10px] text-gray-500 dark:text-gray-400">{m.desc}</span>
                                   </div>
                                 </div>
@@ -377,16 +379,16 @@ export default function AdvancedSettings() {
 
               <section className="mt-4"><label className="block text-sm font-bold text-gray-800 dark:text-gray-200 mb-2">Ollama 서버 URL</label><div className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-gray-800 font-mono text-gray-600 dark:text-gray-400">{backendConfig?.ollama_base_url || (backendLoading ? '로딩 중...' : 'http://localhost:11434')}</div><p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 flex items-center gap-1"><Info size={12}/> 변경하려면 백엔드 .env의 OLLAMA_BASE_URL을 수정하세요.</p></section></>;
             })()}
-            {activeModelTab === 'embedding' && <><div className="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded-xl p-4 flex gap-3 text-sm text-green-800 dark:text-green-300 mb-6"><Info size={20} className="shrink-0"/><div>임베딩 모델은 백엔드에서 초기화됩니다. 변경하려면 백엔드 .env의 EMBEDDING_MODEL 값을 수정하세요.</div></div><section><label className="block text-sm font-bold text-gray-800 dark:text-gray-200 mb-2">현재 임베딩 모델</label><div className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-gray-800 font-mono text-gray-600 dark:text-gray-400">{backendConfig?.embedding_model || (backendLoading ? '로딩 중...' : 'BAAI/bge-m3')}</div></section><section><label className="block text-sm font-bold text-gray-800 dark:text-gray-200 mb-2">Rerank 모델 사용</label><div className="flex items-center gap-3"><button onClick={() => setLocalConfig({...localConfig, useRerank: !localConfig.useRerank})} className={`w-12 h-6 rounded-full transition-colors relative ${localConfig.useRerank ? 'bg-blue-600' : 'bg-gray-300'}`}><div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${localConfig.useRerank ? 'left-7' : 'left-1'}`}></div></button><span className="text-sm text-gray-600 dark:text-gray-400">{localConfig.useRerank ? '사용함 (검색 정확도 향상)' : '사용 안 함 (속도 향상)'}</span></div><p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Rerank는 검색된 문서를 임베딩 유사도로 재정렬하여 더 관련성 높은 결과를 반환합니다.</p></section></>}
+            {activeModelTab === 'embedding' && <><div className="bg-green-50 dark:bg-green-800/20 border border-green-50 dark:border-green-700 rounded-xl p-4 flex gap-3 text-sm text-green-700 dark:text-green-200 mb-6"><Info size={20} className="shrink-0"/><div>임베딩 모델은 백엔드에서 초기화됩니다. 변경하려면 백엔드 .env의 EMBEDDING_MODEL 값을 수정하세요.</div></div><section><label className="block text-sm font-bold text-gray-800 dark:text-gray-200 mb-2">현재 임베딩 모델</label><div className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-gray-800 font-mono text-gray-600 dark:text-gray-400">{backendConfig?.embedding_model || (backendLoading ? '로딩 중...' : 'BAAI/bge-m3')}</div></section><section><label className="block text-sm font-bold text-gray-800 dark:text-gray-200 mb-2">Rerank 모델 사용</label><div className="flex items-center gap-3"><button onClick={() => setLocalConfig({...localConfig, useRerank: !localConfig.useRerank})} className={`w-12 h-6 rounded-full transition-colors relative ${localConfig.useRerank ? 'bg-gray-600' : 'bg-gray-300'}`}><div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${localConfig.useRerank ? 'left-7' : 'left-1'}`}></div></button><span className="text-sm text-gray-600 dark:text-gray-400">{localConfig.useRerank ? '사용함 (검색 정확도 향상)' : '사용 안 함 (속도 향상)'}</span></div><p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Rerank는 검색된 문서를 임베딩 유사도로 재정렬하여 더 관련성 높은 결과를 반환합니다.</p></section></>}
             {activeModelTab === 'multimodal' && (() => {
               const visionKeywords = ['llava', 'bakllava', 'minicpm-v', 'moondream', 'llama3.2-vision', 'granite3.2-vision'];
               const visionModels = ollamaModels.filter(m => visionKeywords.some(k => m.name.toLowerCase().includes(k)));
-              return <><div className="flex items-center justify-between mb-4"><div><h3 className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2"><Image size={18}/> 멀티모달 기능</h3><p className="text-xs text-gray-500 dark:text-gray-400 mt-1">이미지 이해가 가능한 Vision 모델을 활성화합니다.</p></div><button onClick={() => setLocalConfig({...localConfig, enableMultimodal: !localConfig.enableMultimodal})} className={`w-12 h-6 rounded-full transition-colors relative ${localConfig.enableMultimodal ? 'bg-blue-600' : 'bg-gray-300'}`}><div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform shadow-sm ${localConfig.enableMultimodal ? 'left-7' : 'left-1'}`}></div></button></div>
+              return <><div className="flex items-center justify-between mb-4"><div><h3 className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2"><Image size={18}/> 멀티모달 기능</h3><p className="text-xs text-gray-500 dark:text-gray-400 mt-1">이미지 이해가 가능한 Vision 모델을 활성화합니다.</p></div><button onClick={() => setLocalConfig({...localConfig, enableMultimodal: !localConfig.enableMultimodal})} className={`w-12 h-6 rounded-full transition-colors relative ${localConfig.enableMultimodal ? 'bg-gray-600' : 'bg-gray-300'}`}><div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform shadow-sm ${localConfig.enableMultimodal ? 'left-7' : 'left-1'}`}></div></button></div>
               <section className={`space-y-6 transition-all ${localConfig.enableMultimodal ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
                 <div>
                   <div className="flex justify-between items-center mb-2">
                     <label className="block text-sm font-bold text-gray-800 dark:text-gray-200">Vision 모델 선택</label>
-                    <button onClick={loadOllamaModels} disabled={ollamaModelsLoading} className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-bold flex items-center gap-1">
+                    <button onClick={loadOllamaModels} disabled={ollamaModelsLoading} className="text-xs text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300 font-bold flex items-center gap-1">
                       <RefreshCw size={12} className={ollamaModelsLoading ? 'animate-spin' : ''}/> 새로고침
                     </button>
                   </div>
@@ -426,19 +428,19 @@ export default function AdvancedSettings() {
                       { id: 'minio', label: 'MinIO', desc: 'S3 호환 오브젝트 스토리지' },
                       { id: 's3', label: 'AWS S3', desc: 'Amazon 클라우드 스토리지' },
                     ].map(opt => (
-                      <div key={opt.id} onClick={() => setLocalConfig({...localConfig, storageType: opt.id})} className={`p-3 rounded-xl border-2 cursor-pointer transition-all text-center ${localConfig.storageType === opt.id ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/30' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}`}>
-                        <div className={`text-sm font-bold ${localConfig.storageType === opt.id ? 'text-blue-900 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>{opt.label}</div>
+                      <div key={opt.id} onClick={() => setLocalConfig({...localConfig, storageType: opt.id})} className={`p-3 rounded-xl border-2 cursor-pointer transition-all text-center ${localConfig.storageType === opt.id ? 'border-green-400 bg-green-50/50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}`}>
+                        <div className={`text-sm font-bold ${localConfig.storageType === opt.id ? 'text-gray-900 dark:text-gray-300' : 'text-gray-700 dark:text-gray-300'}`}>{opt.label}</div>
                         <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">{opt.desc}</div>
                       </div>
                     ))}
                   </div>
                   {localConfig.storageType === 'local' && (
-                    <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">저장 경로</label><input type="text" value={localConfig.storagePath || './uploads'} onChange={(e) => setLocalConfig({...localConfig, storagePath: e.target.value})} className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-gray-200 font-mono"/><p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">멀티모달 파일이 저장될 서버 경로</p></div>
+                    <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">저장 경로</label><input type="text" value={localConfig.storagePath || './uploads'} onChange={(e) => setLocalConfig({...localConfig, storagePath: e.target.value})} className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-400 bg-white dark:bg-gray-700 dark:text-gray-200 font-mono"/><p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">멀티모달 파일이 저장될 서버 경로</p></div>
                   )}
                   {(localConfig.storageType === 'minio' || localConfig.storageType === 's3') && (
                     <div className="space-y-3">
-                      <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">{localConfig.storageType === 'minio' ? 'MinIO Endpoint' : 'S3 Region'}</label><input type="text" value={localConfig.storageType === 'minio' ? (localConfig.minioEndpoint || '') : (localConfig.s3Region || 'ap-northeast-2')} onChange={(e) => setLocalConfig({...localConfig, ...(localConfig.storageType === 'minio' ? {minioEndpoint: e.target.value} : {s3Region: e.target.value})})} placeholder={localConfig.storageType === 'minio' ? 'http://localhost:9000' : 'ap-northeast-2'} className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-gray-200 font-mono"/></div>
-                      <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Bucket 이름</label><input type="text" value={localConfig.bucketName || ''} onChange={(e) => setLocalConfig({...localConfig, bucketName: e.target.value})} placeholder="my-rag-bucket" className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-gray-200 font-mono"/></div>
+                      <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">{localConfig.storageType === 'minio' ? 'MinIO Endpoint' : 'S3 Region'}</label><input type="text" value={localConfig.storageType === 'minio' ? (localConfig.minioEndpoint || '') : (localConfig.s3Region || 'ap-northeast-2')} onChange={(e) => setLocalConfig({...localConfig, ...(localConfig.storageType === 'minio' ? {minioEndpoint: e.target.value} : {s3Region: e.target.value})})} placeholder={localConfig.storageType === 'minio' ? 'http://localhost:9000' : 'ap-northeast-2'} className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-400 bg-white dark:bg-gray-700 dark:text-gray-200 font-mono"/></div>
+                      <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Bucket 이름</label><input type="text" value={localConfig.bucketName || ''} onChange={(e) => setLocalConfig({...localConfig, bucketName: e.target.value})} placeholder="my-rag-bucket" className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-400 bg-white dark:bg-gray-700 dark:text-gray-200 font-mono"/></div>
                       <p className="text-[10px] text-gray-400 dark:text-gray-500">{localConfig.storageType === 'minio' ? 'MinIO Access/Secret Key는 API 키 관리 탭에서 설정하세요.' : 'AWS 인증 정보는 API 키 관리 탭에서 설정하세요.'}</p>
                     </div>
                   )}
@@ -457,9 +459,9 @@ export default function AdvancedSettings() {
                 <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1"><Info size={12}/> 연결 정보를 변경하려면 백엔드 .env 파일의 NEO4J_URL, NEO4J_USERNAME, NEO4J_PASSWORD를 수정하세요.</p>
               </section>
               <div className="flex items-center justify-end gap-3">
-                {testStatus.neo4j === 'success' && <span className="text-sm text-green-600 flex items-center gap-1"><CheckCircle size={14}/> {testDetail.neo4j}</span>}
+                {testStatus.neo4j === 'success' && <span className="text-sm text-green-500 flex items-center gap-1"><CheckCircle size={14}/> {testDetail.neo4j}</span>}
                 {testStatus.neo4j === 'error' && <span className="text-sm text-red-600 flex items-center gap-1 max-w-xs truncate">{testDetail.neo4j}</span>}
-                <button onClick={() => handleTestConnection('neo4j')} disabled={testStatus.neo4j === 'testing'} className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2 ${testStatus.neo4j === 'success' ? 'bg-green-100 text-green-700' : testStatus.neo4j === 'error' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                <button onClick={() => handleTestConnection('neo4j')} disabled={testStatus.neo4j === 'testing'} className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2 ${testStatus.neo4j === 'success' ? 'bg-green-50 text-green-600' : testStatus.neo4j === 'error' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
                   <RefreshCw size={14} className={testStatus.neo4j === 'testing' ? 'animate-spin' : ''}/> {testStatus.neo4j === 'testing' ? '테스트 중...' : '연결 테스트'}
                 </button>
               </div>
@@ -501,9 +503,9 @@ export default function AdvancedSettings() {
               </section>
               
               <div className="flex items-center justify-end gap-3">
-                {testStatus.redis === 'success' && <span className="text-sm text-green-600 flex items-center gap-1"><CheckCircle size={14}/> {testDetail.redis}</span>}
+                {testStatus.redis === 'success' && <span className="text-sm text-green-500 flex items-center gap-1"><CheckCircle size={14}/> {testDetail.redis}</span>}
                 {testStatus.redis === 'error' && <span className="text-sm text-red-600 flex items-center gap-1 max-w-xs truncate">{testDetail.redis}</span>}
-                <button onClick={() => handleTestConnection('redis')} disabled={testStatus.redis === 'testing'} className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2 ${testStatus.redis === 'success' ? 'bg-green-100 text-green-700' : testStatus.redis === 'error' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                <button onClick={() => handleTestConnection('redis')} disabled={testStatus.redis === 'testing'} className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2 ${testStatus.redis === 'success' ? 'bg-green-50 text-green-600' : testStatus.redis === 'error' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
                   <RefreshCw size={14} className={testStatus.redis === 'testing' ? 'animate-spin' : ''}/> {testStatus.redis === 'testing' ? '테스트 중...' : '연결 테스트'}
                 </button>
               </div>
@@ -512,16 +514,16 @@ export default function AdvancedSettings() {
 
           {activeTab === 'search' && <div className="space-y-8 max-w-2xl">
             {/* RAG 검색 설정 */}
-            <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl p-4 text-sm text-indigo-900 dark:text-indigo-300 flex gap-3">
-              <BookOpen size={24} className="shrink-0 text-indigo-600 dark:text-indigo-400 mt-1"/>
-              <div><h4 className="font-bold">RAG 검색 설정</h4><p className="text-xs text-indigo-800/80 dark:text-indigo-400/80 mt-1 leading-relaxed">지식베이스 문서를 검색하는 방식을 설정합니다.<br/>검색 모드, 결과 개수, 멀티모달 옵션을 조정할 수 있습니다.</p></div>
+            <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-800 rounded-xl p-4 text-sm text-gray-900 dark:text-gray-300 flex gap-3">
+              <BookOpen size={24} className="shrink-0 text-gray-600 dark:text-gray-400 mt-1"/>
+              <div><h4 className="font-bold">RAG 검색 설정</h4><p className="text-xs text-gray-800/80 dark:text-gray-400/80 mt-1 leading-relaxed">지식베이스 문서를 검색하는 방식을 설정합니다.<br/>검색 모드, 결과 개수, 멀티모달 옵션을 조정할 수 있습니다.</p></div>
             </div>
             <section>
               <div className="flex justify-between items-center mb-2">
                 <label className="text-sm font-bold text-gray-800 dark:text-gray-200">검색 결과 개수 (Top K)</label>
-                <span className="text-sm font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">{localConfig.searchTopK || 5}개</span>
+                <span className="text-sm font-bold text-gray-600 bg-gray-50 dark:bg-gray-900/30 px-2 py-0.5 rounded">{localConfig.searchTopK || 5}개</span>
               </div>
-              <input type="range" min="3" max="10" value={localConfig.searchTopK || 5} onChange={(e) => setLocalConfig({...localConfig, searchTopK: Number(e.target.value)})} className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg accent-blue-600 cursor-pointer"/>
+              <input type="range" min="3" max="10" value={localConfig.searchTopK || 5} onChange={(e) => setLocalConfig({...localConfig, searchTopK: Number(e.target.value)})} className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg accent-green-500 cursor-pointer"/>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">이 값은 채팅 시 벡터 검색 결과 개수에도 적용됩니다.</p>
             </section>
 
@@ -534,8 +536,8 @@ export default function AdvancedSettings() {
                   onClick={() => setLocalConfig({...localConfig, searchMode: 'hybrid'})}
                   className={`p-4 rounded-lg border-2 cursor-pointer transition ${
                     localConfig.searchMode === 'hybrid'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                      ? 'border-green-400 bg-green-50 dark:bg-green-900/20'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -544,7 +546,7 @@ export default function AdvancedSettings() {
                       하이브리드 검색 (권장)
                     </span>
                     {localConfig.searchMode === 'hybrid' && (
-                      <span className="ml-auto text-xs px-2 py-0.5 bg-blue-600 text-white rounded-full">
+                      <span className="ml-auto text-xs px-2 py-0.5 bg-green-500 text-white rounded-full">
                         선택됨
                       </span>
                     )}
@@ -554,10 +556,10 @@ export default function AdvancedSettings() {
                   </p>
                   {/* 하이브리드 비율 슬라이더 */}
                   {localConfig.searchMode === 'hybrid' && (
-                    <div className="mt-4 ml-10 p-4 bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-700 space-y-3">
+                    <div className="mt-4 ml-10 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 space-y-3">
                       <div className="flex justify-between items-center">
                         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Dense : Sparse 비율</label>
-                        <span className="text-xs font-mono bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
+                        <span className="text-xs font-mono bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300 px-2 py-1 rounded">
                           {Math.round((localConfig.denseWeight || 0.5) * 100)}% : {Math.round((1 - (localConfig.denseWeight || 0.5)) * 100)}%
                         </span>
                       </div>
@@ -568,7 +570,7 @@ export default function AdvancedSettings() {
                           min="0" max="1" step="0.05"
                           value={localConfig.denseWeight || 0.5}
                           onChange={(e) => setLocalConfig({...localConfig, denseWeight: parseFloat(e.target.value)})}
-                          className="w-full h-2 bg-gradient-to-r from-green-400 via-blue-400 to-purple-400 rounded-lg appearance-none cursor-pointer"
+                          className="w-full h-2 bg-gradient-to-r from-green-300 via-gray-400 to-purple-400 rounded-lg appearance-none cursor-pointer"
                           onClick={(e) => e.stopPropagation()}
                         />
                         <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">의미</span>
@@ -589,8 +591,8 @@ export default function AdvancedSettings() {
                   onClick={() => setLocalConfig({...localConfig, searchMode: 'dense'})}
                   className={`p-4 rounded-lg border-2 cursor-pointer transition ${
                     localConfig.searchMode === 'dense'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                      ? 'border-green-400 bg-green-50 dark:bg-green-900/20'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -599,7 +601,7 @@ export default function AdvancedSettings() {
                       의미 검색 (Dense Vector)
                     </span>
                     {localConfig.searchMode === 'dense' && (
-                      <span className="ml-auto text-xs px-2 py-0.5 bg-blue-600 text-white rounded-full">
+                      <span className="ml-auto text-xs px-2 py-0.5 bg-green-500 text-white rounded-full">
                         선택됨
                       </span>
                     )}
@@ -614,8 +616,8 @@ export default function AdvancedSettings() {
                   onClick={() => setLocalConfig({...localConfig, searchMode: 'sparse'})}
                   className={`p-4 rounded-lg border-2 cursor-pointer transition ${
                     localConfig.searchMode === 'sparse'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                      ? 'border-green-400 bg-green-50 dark:bg-green-900/20'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -624,7 +626,7 @@ export default function AdvancedSettings() {
                       키워드 검색 (BM25)
                     </span>
                     {localConfig.searchMode === 'sparse' && (
-                      <span className="ml-auto text-xs px-2 py-0.5 bg-blue-600 text-white rounded-full">
+                      <span className="ml-auto text-xs px-2 py-0.5 bg-green-500 text-white rounded-full">
                         선택됨
                       </span>
                     )}
@@ -671,9 +673,9 @@ export default function AdvancedSettings() {
 
             {/* 웹 검색 공급자 */}
             <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-900 dark:text-blue-300 flex gap-3 mb-6">
-                <BookOpen size={24} className="shrink-0 text-blue-600 dark:text-blue-400 mt-1"/>
-                <div><h4 className="font-bold">웹 검색 공급자</h4><p className="text-xs text-blue-800/80 dark:text-blue-400/80 mt-1 leading-relaxed">채팅에서 웹 검색 사용 시 적용됩니다. DuckDuckGo는 바로 사용 가능하며,<br/>나머지는 API 키 등록 후 사용할 수 있습니다 (모두 무료 티어 제공).</p></div>
+              <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-800 rounded-xl p-4 text-sm text-gray-900 dark:text-gray-300 flex gap-3 mb-6">
+                <BookOpen size={24} className="shrink-0 text-gray-600 dark:text-gray-400 mt-1"/>
+                <div><h4 className="font-bold">웹 검색 공급자</h4><p className="text-xs text-gray-800/80 dark:text-gray-400/80 mt-1 leading-relaxed">채팅에서 웹 검색 사용 시 적용됩니다. DuckDuckGo는 바로 사용 가능하며,<br/>나머지는 API 키 등록 후 사용할 수 있습니다 (모두 무료 티어 제공).</p></div>
               </div>
               <section>
                 <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 mb-3">검색 공급자 선택</label>
@@ -682,25 +684,25 @@ export default function AdvancedSettings() {
                     const hasKey = !p.needsKey || backendApiKeys.some(bk => bk.provider === p.id);
                     const isActive = localConfig.activeSearchProviderId === p.id;
                     return (
-                      <div key={p.id} onClick={() => setLocalConfig({...localConfig, activeSearchProviderId: p.id})} className={`relative p-4 rounded-xl cursor-pointer border-2 transition-all ${isActive ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/30 shadow-sm' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+                      <div key={p.id} onClick={() => setLocalConfig({...localConfig, activeSearchProviderId: p.id})} className={`relative p-4 rounded-xl cursor-pointer border-2 transition-all ${isActive ? 'border-green-400 bg-green-50/50 dark:bg-green-900/20 shadow-sm' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
                         <div className="flex items-center gap-3">
-                          <Globe className={isActive ? "text-blue-600 shrink-0" : "text-gray-400 shrink-0"} size={20}/>
+                          <Globe className={isActive ? "text-green-500 shrink-0" : "text-gray-400 shrink-0"} size={20}/>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className={`font-bold text-sm ${isActive ? 'text-blue-900 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>{p.name}</span>
-                              {!p.needsKey && <span className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded font-bold">FREE</span>}
+                              <span className={`font-bold text-sm ${isActive ? 'text-gray-900 dark:text-gray-300' : 'text-gray-700 dark:text-gray-300'}`}>{p.name}</span>
+                              {!p.needsKey && <span className="text-[10px] bg-green-50 dark:bg-green-800/30 text-green-600 dark:text-green-300 px-1.5 py-0.5 rounded font-bold">FREE</span>}
                             </div>
                             <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{p.description}</div>
                             {p.needsKey && (
                               <div className="mt-1.5">
                                 {hasKey
-                                  ? <span className="text-[10px] text-green-600 dark:text-green-400 flex items-center gap-1"><CheckCircle size={10}/> API 키 등록됨</span>
+                                  ? <span className="text-[10px] text-green-500 dark:text-green-300 flex items-center gap-1"><CheckCircle size={10}/> API 키 등록됨</span>
                                   : <span className="text-[10px] text-orange-500 dark:text-orange-400 flex items-center gap-1"><Key size={10}/> API 키 필요 (API 키 관리 탭)</span>
                                 }
                               </div>
                             )}
                           </div>
-                          {isActive && <CheckCircle size={18} className="text-blue-600 shrink-0"/>}
+                          {isActive && <CheckCircle size={18} className="text-green-500 shrink-0"/>}
                         </div>
                       </div>
                     );
@@ -719,7 +721,7 @@ export default function AdvancedSettings() {
             {/* 웹 검색 API 키 */}
             <section>
               <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2 mb-3">
-                <Globe size={16} className="text-blue-500"/> 웹 검색 공급자
+                <Globe size={16} className="text-gray-500"/> 웹 검색 공급자
               </h4>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">채팅에서 웹 검색 시 사용됩니다. DuckDuckGo는 키 없이 무료로 사용 가능합니다.</p>
               <div className="space-y-2">
@@ -732,16 +734,16 @@ export default function AdvancedSettings() {
                   const backendSynced = backendApiKeys.some(bk => bk.provider === provider.id);
                   const isActiveProvider = localConfig.activeSearchProviderId === provider.id;
                   return (
-                    <div key={provider.id} className={`p-4 border-2 rounded-xl transition-all ${isActiveProvider ? 'border-blue-300 dark:border-blue-700 bg-blue-50/30 dark:bg-blue-900/10' : 'border-gray-200 dark:border-gray-700'}`}>
+                    <div key={provider.id} className={`p-4 border-2 rounded-xl transition-all ${isActiveProvider ? 'border-gray-300 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/10' : 'border-gray-200 dark:border-gray-700'}`}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{provider.name}</span>
-                          <span className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded font-medium">{provider.free}</span>
-                          {isActiveProvider && <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded font-bold">현재 사용 중</span>}
+                          <span className="text-[10px] bg-green-50 dark:bg-green-800/30 text-green-600 dark:text-green-300 px-1.5 py-0.5 rounded font-medium">{provider.free}</span>
+                          {isActiveProvider && <span className="text-[10px] bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-400 px-1.5 py-0.5 rounded font-bold">현재 사용 중</span>}
                         </div>
                         <div className="flex items-center gap-2">
-                          {existingKey && backendSynced && <span className="text-[10px] text-green-600 dark:text-green-400 flex items-center gap-1"><CheckCircle size={10}/> 등록됨</span>}
-                          <a href={provider.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"><Link size={10}/> 키 발급</a>
+                          {existingKey && backendSynced && <span className="text-[10px] text-green-500 dark:text-green-300 flex items-center gap-1"><CheckCircle size={10}/> 등록됨</span>}
+                          <a href={provider.url} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-600 dark:text-gray-400 hover:underline flex items-center gap-1"><Link size={10}/> 키 발급</a>
                         </div>
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{provider.desc}</p>
@@ -752,23 +754,23 @@ export default function AdvancedSettings() {
                           value={newKeyProvider === provider.name ? newKeyValue : ''}
                           onFocus={() => setNewKeyProvider(provider.name)}
                           onChange={(e) => { setNewKeyProvider(provider.name); setNewKeyValue(e.target.value); }}
-                          className="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                          className="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-green-400 font-mono"
                         />
                         {existingKey ? (
                           <div className="flex gap-1">
-                            <button onClick={() => { setNewKeyProvider(provider.name); if (newKeyProvider === provider.name && newKeyValue.trim()) handleAddKey(); }} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition" title="키 업데이트">변경</button>
+                            <button onClick={() => { setNewKeyProvider(provider.name); if (newKeyProvider === provider.name && newKeyValue.trim()) handleAddKey(); }} className="px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold transition" title="키 업데이트">변경</button>
                             <button onClick={() => handleDeleteKey(existingKey.id, existingKey.provider)} className="px-3 py-2 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-lg text-xs font-bold transition">삭제</button>
                           </div>
                         ) : (
-                          <button onClick={() => { setNewKeyProvider(provider.name); if (newKeyProvider === provider.name && newKeyValue.trim()) handleAddKey(); }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition">등록</button>
+                          <button onClick={() => { setNewKeyProvider(provider.name); if (newKeyProvider === provider.name && newKeyValue.trim()) handleAddKey(); }} className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold transition">등록</button>
                         )}
                       </div>
                     </div>
                   );
                 })}
                 <div className="p-3 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center"><Globe size={16} className="text-green-600 dark:text-green-400"/></div>
-                  <div><span className="text-sm font-bold text-gray-700 dark:text-gray-300">DuckDuckGo</span><span className="ml-2 text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded font-bold">FREE</span><p className="text-xs text-gray-500 dark:text-gray-400">API 키 없이 바로 사용 가능합니다.</p></div>
+                  <div className="w-8 h-8 rounded-lg bg-green-50 dark:bg-green-800/30 flex items-center justify-center"><Globe size={16} className="text-green-500 dark:text-green-300"/></div>
+                  <div><span className="text-sm font-bold text-gray-700 dark:text-gray-300">DuckDuckGo</span><span className="ml-2 text-[10px] bg-green-50 dark:bg-green-800/30 text-green-600 dark:text-green-300 px-1.5 py-0.5 rounded font-bold">FREE</span><p className="text-xs text-gray-500 dark:text-gray-400">API 키 없이 바로 사용 가능합니다.</p></div>
                 </div>
               </div>
             </section>
@@ -796,13 +798,13 @@ export default function AdvancedSettings() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{provider.name}</span>
-                          {existingKey && backendSynced && <span className="text-[10px] text-green-600 dark:text-green-400 flex items-center gap-1"><CheckCircle size={10}/> 등록됨</span>}
+                          {existingKey && backendSynced && <span className="text-[10px] text-green-500 dark:text-green-300 flex items-center gap-1"><CheckCircle size={10}/> 등록됨</span>}
                           {existingKey && !backendSynced && <span className="text-[10px] text-orange-500 flex items-center gap-1"><Info size={10}/> 로컬만</span>}
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400">{provider.desc}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <a href={provider.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 dark:text-blue-400 hover:underline"><Link size={12}/></a>
+                        <a href={provider.url} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-600 dark:text-gray-400 hover:underline"><Link size={12}/></a>
                         {existingKey ? (
                           <button onClick={() => handleDeleteKey(existingKey.id, existingKey.provider)} className="text-gray-400 hover:text-red-500 transition"><Trash2 size={14}/></button>
                         ) : (
@@ -815,7 +817,7 @@ export default function AdvancedSettings() {
               </div>
               {/* LLM 키 입력 폼 */}
               {activeApiSection && ['openai', 'anthropic', 'google gemini', 'groq'].includes(activeApiSection) && (
-                <div className="mt-3 p-4 border border-blue-200 dark:border-blue-800 rounded-xl bg-blue-50/50 dark:bg-blue-900/10">
+                <div className="mt-3 p-4 border border-gray-200 dark:border-gray-800 rounded-xl bg-gray-50/50 dark:bg-gray-900/10">
                   <div className="flex gap-2 items-center mb-2">
                     <span className="text-sm font-bold text-gray-800 dark:text-gray-200">
                       {activeApiSection === 'openai' ? 'OpenAI' : activeApiSection === 'anthropic' ? 'Anthropic' : activeApiSection === 'google gemini' ? 'Google Gemini' : 'Groq'} API 키 등록
@@ -828,9 +830,9 @@ export default function AdvancedSettings() {
                       placeholder="API 키를 입력하세요"
                       value={newKeyValue}
                       onChange={(e) => { setNewKeyProvider(activeApiSection === 'openai' ? 'OpenAI' : activeApiSection === 'anthropic' ? 'Anthropic' : activeApiSection === 'google gemini' ? 'Google Gemini' : 'Groq'); setNewKeyValue(e.target.value); }}
-                      className="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                      className="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-green-400 font-mono"
                     />
-                    <button onClick={() => { handleAddKey(); setActiveApiSection(null); }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition">저장</button>
+                    <button onClick={() => { handleAddKey(); setActiveApiSection(null); }} className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold transition">저장</button>
                   </div>
                 </div>
               )}
@@ -857,7 +859,7 @@ export default function AdvancedSettings() {
                           <HardDrive size={14} className="text-teal-600 dark:text-teal-400"/>
                           <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{provider.name}</span>
                           {isActiveStorage && <span className="text-[10px] bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 px-1.5 py-0.5 rounded font-bold">현재 사용 중</span>}
-                          {existingKey && backendSynced && <span className="text-[10px] text-green-600 dark:text-green-400 flex items-center gap-1"><CheckCircle size={10}/> 등록됨</span>}
+                          {existingKey && backendSynced && <span className="text-[10px] text-green-500 dark:text-green-300 flex items-center gap-1"><CheckCircle size={10}/> 등록됨</span>}
                         </div>
                         <div className="flex items-center gap-2">
                           {existingKey ? (
@@ -898,11 +900,11 @@ export default function AdvancedSettings() {
           {activeTab === 'database' && (
             <div className="space-y-8 max-w-2xl">
               {/* 안내 배너 */}
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-900 dark:text-blue-200 flex gap-3">
-                <Database size={24} className="shrink-0 text-blue-600 dark:text-blue-400 mt-1"/>
+              <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-800 rounded-xl p-4 text-sm text-gray-900 dark:text-gray-200 flex gap-3">
+                <Database size={24} className="shrink-0 text-gray-600 dark:text-gray-400 mt-1"/>
                 <div>
                   <h4 className="font-bold">외부 데이터베이스 연결 (Text-to-SQL)</h4>
-                  <p className="text-xs text-blue-800/80 dark:text-blue-300/80 mt-1 leading-relaxed">
+                  <p className="text-xs text-gray-800/80 dark:text-gray-300/80 mt-1 leading-relaxed">
                     외부 데이터베이스를 연결하면 채팅에서 자연어로 SQL 쿼리를 실행할 수 있습니다.
                     안전을 위해 <span className="font-bold">SELECT 쿼리만 허용</span>되며, 데이터 변경(INSERT/UPDATE/DELETE)은 차단됩니다.
                   </p>
@@ -919,12 +921,12 @@ export default function AdvancedSettings() {
                     placeholder="연결 이름 (예: 운영 DB)"
                     value={newDbConn.name}
                     onChange={e => setNewDbConn({...newDbConn, name: e.target.value})}
-                    className="p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-green-400 outline-none"
                   />
                   <select
                     value={newDbConn.db_type}
                     onChange={e => setNewDbConn({...newDbConn, db_type: e.target.value, port: e.target.value === 'mysql' ? 3306 : 5432})}
-                    className="p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-green-400 outline-none"
                   >
                     <option value="postgresql">PostgreSQL</option>
                     <option value="mysql">MySQL</option>
@@ -936,27 +938,27 @@ export default function AdvancedSettings() {
                         placeholder="호스트 (예: localhost)"
                         value={newDbConn.host}
                         onChange={e => setNewDbConn({...newDbConn, host: e.target.value})}
-                        className="p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-green-400 outline-none"
                       />
                       <input
                         placeholder="포트"
                         type="number"
                         value={newDbConn.port}
                         onChange={e => setNewDbConn({...newDbConn, port: parseInt(e.target.value) || 0})}
-                        className="p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-green-400 outline-none"
                       />
                       <input
                         placeholder="사용자명"
                         value={newDbConn.username}
                         onChange={e => setNewDbConn({...newDbConn, username: e.target.value})}
-                        className="p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-green-400 outline-none"
                       />
                       <input
                         placeholder="비밀번호"
                         type="password"
                         value={newDbConn.password}
                         onChange={e => setNewDbConn({...newDbConn, password: e.target.value})}
-                        className="p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-green-400 outline-none"
                       />
                     </>
                   )}
@@ -964,13 +966,13 @@ export default function AdvancedSettings() {
                     placeholder={newDbConn.db_type === 'sqlite' ? '파일 경로 (예: /data/mydb.sqlite)' : '데이터베이스명'}
                     value={newDbConn.database}
                     onChange={e => setNewDbConn({...newDbConn, database: e.target.value})}
-                    className="col-span-2 p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="col-span-2 p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-green-400 outline-none"
                   />
                 </div>
                 <button
                   onClick={handleAddDbConnection}
                   disabled={!newDbConn.name.trim() || !newDbConn.database.trim()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-bold hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
                 >
                   <Plus size={14}/> 연결 추가
                 </button>
@@ -989,44 +991,103 @@ export default function AdvancedSettings() {
                   </div>
                 ) : (
                   dbConnections.map(conn => (
-                    <div key={conn.id} className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-800 hover:border-blue-300 transition">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`inline-block w-2 h-2 rounded-full ${
-                            dbTestStatus[conn.id] === 'success' ? 'bg-green-500' :
-                            dbTestStatus[conn.id] === 'error' ? 'bg-red-500' : 'bg-gray-300'
-                          }`} />
-                          <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{conn.name}</span>
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            conn.db_type === 'postgresql' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
-                            conn.db_type === 'mysql' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300' :
-                            'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                          }`}>{conn.db_type}</span>
+                    <div key={conn.id} className="border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-800 hover:border-gray-300 transition overflow-hidden">
+                      <div className="flex items-center justify-between p-4">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-block w-2 h-2 rounded-full ${
+                              dbTestStatus[conn.id] === 'success' ? 'bg-green-400' :
+                              dbTestStatus[conn.id] === 'error' ? 'bg-red-500' : 'bg-gray-300'
+                            }`} />
+                            <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{conn.name}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                              conn.db_type === 'postgresql' ? 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300' :
+                              conn.db_type === 'mysql' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300' :
+                              'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            }`}>{conn.db_type}</span>
+                            {conn.schema_metadata && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400">메타데이터</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-1 truncate">
+                            {conn.db_type === 'sqlite' ? conn.database : `${conn.host}:${conn.port}/${conn.database}`}
+                          </div>
+                          {dbTestStatus[conn.id] === 'success' && (
+                            <div className="text-xs text-green-500 mt-1 flex items-center gap-1"><CheckCircle size={10}/> 연결 성공</div>
+                          )}
+                          {dbTestStatus[conn.id] === 'error' && (
+                            <div className="text-xs text-red-600 mt-1 truncate max-w-[300px]">{dbTestDetail[conn.id]}</div>
+                          )}
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-1 truncate">
-                          {conn.db_type === 'sqlite' ? conn.database : `${conn.host}:${conn.port}/${conn.database}`}
+                        <div className="flex items-center gap-2 shrink-0 ml-3">
+                          <button
+                            onClick={() => {
+                              if (editingMetadataId === conn.id) {
+                                setEditingMetadataId(null);
+                              } else {
+                                setEditingMetadataId(conn.id);
+                                setMetadataText(conn.schema_metadata || '');
+                              }
+                            }}
+                            className={`px-3 py-1.5 border rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                              editingMetadataId === conn.id
+                                ? 'bg-green-50 dark:bg-green-900/20 text-green-600 border-green-200 dark:border-green-800'
+                                : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                            }`}
+                          >
+                            <FileText size={12}/> 메타데이터
+                          </button>
+                          <button
+                            onClick={() => handleTestDbConnection(conn.id)}
+                            className="px-3 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-1.5 transition"
+                          >
+                            <RefreshCw size={12} className={dbTestStatus[conn.id] === 'testing' ? 'animate-spin' : ''}/> 테스트
+                          </button>
+                          <button
+                            onClick={() => handleDeleteDbConnection(conn.id)}
+                            className="px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 border border-red-100 dark:border-red-800 rounded-lg text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/40 flex items-center gap-1.5 transition"
+                          >
+                            <Trash2 size={12}/> 삭제
+                          </button>
                         </div>
-                        {dbTestStatus[conn.id] === 'success' && (
-                          <div className="text-xs text-green-600 mt-1 flex items-center gap-1"><CheckCircle size={10}/> 연결 성공</div>
-                        )}
-                        {dbTestStatus[conn.id] === 'error' && (
-                          <div className="text-xs text-red-600 mt-1 truncate max-w-[300px]">{dbTestDetail[conn.id]}</div>
-                        )}
                       </div>
-                      <div className="flex items-center gap-2 shrink-0 ml-3">
-                        <button
-                          onClick={() => handleTestDbConnection(conn.id)}
-                          className="px-3 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-1.5 transition"
-                        >
-                          <RefreshCw size={12} className={dbTestStatus[conn.id] === 'testing' ? 'animate-spin' : ''}/> 테스트
-                        </button>
-                        <button
-                          onClick={() => handleDeleteDbConnection(conn.id)}
-                          className="px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 border border-red-100 dark:border-red-800 rounded-lg text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/40 flex items-center gap-1.5 transition"
-                        >
-                          <Trash2 size={12}/> 삭제
-                        </button>
-                      </div>
+
+                      {/* 메타데이터 편집 영역 */}
+                      {editingMetadataId === conn.id && (
+                        <div className="border-t border-gray-200 dark:border-gray-600 p-4 bg-white dark:bg-gray-700/50">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="text-xs font-bold text-gray-600 dark:text-gray-300">비즈니스 메타데이터</label>
+                            <span className="text-[10px] text-gray-400">테이블/컬럼 설명을 작성하면 T2SQL 정확도가 향상됩니다</span>
+                          </div>
+                          <textarea
+                            value={metadataText}
+                            onChange={(e) => setMetadataText(e.target.value)}
+                            placeholder={`예시:\n- orders 테이블: 주문 정보 (order_id: 주문번호, customer_name: 고객명, total_amount: 총금액)\n- products 테이블: 상품 목록 (product_id: 상품코드, price: 단가, stock: 재고)`}
+                            className="w-full p-3 border border-gray-200 dark:border-gray-600 rounded-lg text-xs font-mono bg-gray-50 dark:bg-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-green-400 resize-none"
+                            rows={5}
+                          />
+                          <div className="flex justify-end gap-2 mt-2">
+                            <button
+                              onClick={() => setEditingMetadataId(null)}
+                              className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition"
+                            >
+                              취소
+                            </button>
+                            <button
+                              onClick={async () => {
+                                const result = await settingsAPI.updateDbMetadata(conn.id, metadataText);
+                                if (!result.error) {
+                                  setDbConnections(prev => prev.map(c => c.id === conn.id ? { ...c, schema_metadata: metadataText } : c));
+                                  setEditingMetadataId(null);
+                                }
+                              }}
+                              className="px-4 py-1.5 bg-green-500 text-white rounded-lg text-xs font-bold hover:bg-green-600 transition"
+                            >
+                              저장
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -1047,14 +1108,14 @@ export default function AdvancedSettings() {
 
           {activeTab === 'mcp' && <div className="space-y-6 max-w-2xl">
             {/* 안내 배너 */}
-            <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl p-4 text-sm text-indigo-800 dark:text-indigo-300 flex gap-3">
-              <Plug size={20} className="shrink-0 text-indigo-600 dark:text-indigo-400 mt-0.5"/>
+            <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-800 rounded-xl p-4 text-sm text-gray-800 dark:text-gray-300 flex gap-3">
+              <Plug size={20} className="shrink-0 text-gray-600 dark:text-gray-400 mt-0.5"/>
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <h4 className="font-bold">MCP (Model Context Protocol)</h4>
-                  <span className="px-2 py-0.5 bg-indigo-200 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold rounded-full">Beta</span>
+                  <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-[10px] font-bold rounded-full">Beta</span>
                 </div>
-                <p className="text-xs text-indigo-700/80 dark:text-indigo-400/80 leading-relaxed">
+                <p className="text-xs text-gray-700/80 dark:text-gray-400/80 leading-relaxed">
                   MCP 서버를 연결하면 AI가 외부 도구(파일 시스템, 데이터베이스, API 등)에 접근할 수 있습니다.<br/>
                   SSE/Streamable HTTP는 원격 서버, stdio는 로컬 프로세스 실행 방식입니다.
                 </p>
@@ -1076,8 +1137,8 @@ export default function AdvancedSettings() {
                       { id: 'streamable-http', label: 'Streamable HTTP', desc: 'HTTP 스트리밍' },
                       { id: 'stdio', label: 'stdio', desc: '로컬 프로세스' },
                     ].map(t => (
-                      <div key={t.id} onClick={() => setNewMcpType(t.id)} className={`p-2.5 rounded-lg border-2 cursor-pointer transition-all text-center ${newMcpType === t.id ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/30' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'}`}>
-                        <div className={`text-xs font-bold ${newMcpType === t.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300'}`}>{t.label}</div>
+                      <div key={t.id} onClick={() => setNewMcpType(t.id)} className={`p-2.5 rounded-lg border-2 cursor-pointer transition-all text-center ${newMcpType === t.id ? 'border-green-400 bg-green-50/50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'}`}>
+                        <div className={`text-xs font-bold ${newMcpType === t.id ? 'text-gray-700 dark:text-gray-300' : 'text-gray-700 dark:text-gray-300'}`}>{t.label}</div>
                         <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">{t.desc}</div>
                       </div>
                     ))}
@@ -1088,24 +1149,24 @@ export default function AdvancedSettings() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">서버 이름</label>
-                    <input type="text" value={newMcpName} onChange={(e) => setNewMcpName(e.target.value)} placeholder="예: Filesystem" className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500"/>
+                    <input type="text" value={newMcpName} onChange={(e) => setNewMcpName(e.target.value)} placeholder="예: Filesystem" className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-green-400"/>
                   </div>
                   <div>
                     {newMcpType === 'stdio' ? (
                       <>
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">실행 명령어</label>
-                        <input type="text" value={newMcpCommand} onChange={(e) => setNewMcpCommand(e.target.value)} placeholder="예: npx -y @modelcontextprotocol/server-filesystem" className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-xs"/>
+                        <input type="text" value={newMcpCommand} onChange={(e) => setNewMcpCommand(e.target.value)} placeholder="예: npx -y @modelcontextprotocol/server-filesystem" className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-green-400 font-mono text-xs"/>
                       </>
                     ) : (
                       <>
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Endpoint URL</label>
-                        <input type="text" value={newMcpUrl} onChange={(e) => setNewMcpUrl(e.target.value)} placeholder="http://localhost:3001/mcp" className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-xs"/>
+                        <input type="text" value={newMcpUrl} onChange={(e) => setNewMcpUrl(e.target.value)} placeholder="http://localhost:3001/mcp" className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-green-400 font-mono text-xs"/>
                       </>
                     )}
                   </div>
                 </div>
 
-                <button onClick={handleAddMcp} disabled={!newMcpName.trim() || (newMcpType === 'stdio' ? !newMcpCommand.trim() : !newMcpUrl.trim())} className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg text-sm font-bold transition flex items-center justify-center gap-2">
+                <button onClick={handleAddMcp} disabled={!newMcpName.trim() || (newMcpType === 'stdio' ? !newMcpCommand.trim() : !newMcpUrl.trim())} className="w-full py-2.5 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg text-sm font-bold transition flex items-center justify-center gap-2">
                   <Plug size={14}/> 서버 연결
                 </button>
               </div>
@@ -1126,25 +1187,25 @@ export default function AdvancedSettings() {
               {mcpServers.length > 0 ? (
                 <div className="space-y-2">
                   {mcpServers.map((s, i) => (
-                    <div key={s.id} draggable onDragStart={(e) => handleDragStart(e, i)} onDragOver={(e) => handleDragOver(e, i)} onDrop={(e) => handleDrop(e, i)} className={`p-3 rounded-xl group hover:border-gray-300 dark:hover:border-gray-600 transition-colors ${i === 0 ? 'border-2 border-indigo-300 dark:border-indigo-700 bg-indigo-50/30 dark:bg-indigo-900/10' : 'border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
+                    <div key={s.id} draggable onDragStart={(e) => handleDragStart(e, i)} onDragOver={(e) => handleDragOver(e, i)} onDrop={(e) => handleDrop(e, i)} className={`p-3 rounded-xl group hover:border-gray-300 dark:hover:border-gray-600 transition-colors ${i === 0 ? 'border-2 border-gray-300 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/10' : 'border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
                       <div className="flex justify-between items-start">
                         <div className="flex gap-2 items-start flex-1 min-w-0">
                           {/* 우선순위 번호 */}
-                          <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 ${i === 0 ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
+                          <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 ${i === 0 ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
                             {i + 1}
                           </div>
                           <div className="cursor-move text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 mt-0.5"><GripVertical size={16}/></div>
-                          <div className={`p-2 rounded-lg shrink-0 ${s.status === 'connected' ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'}`}>
+                          <div className={`p-2 rounded-lg shrink-0 ${s.status === 'connected' ? 'bg-green-50 dark:bg-green-800/30 text-green-500 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'}`}>
                             <Server size={18}/>
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="font-bold text-sm text-gray-800 dark:text-gray-200 flex items-center gap-2 flex-wrap">
                               {s.name}
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-medium ${s.type === 'stdio' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400'}`}>{s.type}</span>
-                              {i === 0 && <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 px-1.5 py-0.5 rounded font-bold">기본</span>}
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-medium ${s.type === 'stdio' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : 'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-400'}`}>{s.type}</span>
+                              {i === 0 && <span className="text-[10px] bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-400 px-1.5 py-0.5 rounded font-bold">기본</span>}
                             </div>
                             <div className="flex items-center gap-2 mt-1">
-                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.status === 'connected' ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.status === 'connected' ? 'bg-green-400' : 'bg-gray-400'}`}></div>
                               <span className="text-xs text-gray-500 dark:text-gray-400">{s.status === 'connected' ? '연결됨' : '연결 안 됨'}</span>
                             </div>
                             {s.url && <div className="text-[10px] text-gray-400 dark:text-gray-500 font-mono mt-1 truncate">{s.url}</div>}
@@ -1222,8 +1283,8 @@ function ServiceStatusRow({ icon: Icon, label, serviceName, testStatus, testDeta
   const detail = testDetail[serviceName] || '';
 
   const statusBadge = () => {
-    if (status === 'testing') return <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded flex items-center gap-1"><RefreshCw size={12} className="animate-spin"/> 확인 중...</span>;
-    if (status === 'success') return <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Connected</span>;
+    if (status === 'testing') return <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded flex items-center gap-1"><RefreshCw size={12} className="animate-spin"/> 확인 중...</span>;
+    if (status === 'success') return <span className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded">Connected</span>;
     if (status === 'error') return <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded" title={detail}>Disconnected</span>;
     return <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded cursor-pointer hover:bg-gray-200" onClick={() => onTest(serviceName)}>확인하기</span>;
   };
@@ -1251,13 +1312,13 @@ function SystemInfoTab({ testStatus, handleTestConnection, testDetail }) {
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="bg-gray-900 text-white rounded-xl p-6 shadow-lg">
-        <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-xl">R</div><div><h3 className="font-bold text-lg">RAG AI</h3><p className="text-xs text-gray-400">Enterprise RAG Solution</p></div></div>
-        <div className="grid grid-cols-2 gap-4 text-sm border-t border-gray-700 pt-4"><div><span className="text-gray-500 block text-xs mb-1">Version</span><span className="font-mono">v1.0.0 (Beta)</span></div><div><span className="text-gray-500 block text-xs mb-1">Status</span><span className="text-green-400 flex items-center gap-1"><div className="w-2 h-2 bg-green-400 rounded-full"/> Online</span></div></div>
+        <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 bg-gray-600 rounded-lg flex items-center justify-center font-bold text-xl">R</div><div><h3 className="font-bold text-lg">RAG AI</h3><p className="text-xs text-gray-400">Enterprise RAG Solution</p></div></div>
+        <div className="grid grid-cols-2 gap-4 text-sm border-t border-gray-700 pt-4"><div><span className="text-gray-500 block text-xs mb-1">Version</span><span className="font-mono">v1.0.0 (Beta)</span></div><div><span className="text-gray-500 block text-xs mb-1">Status</span><span className="text-green-300 flex items-center gap-1"><div className="w-2 h-2 bg-green-300 rounded-full"/> Online</span></div></div>
       </div>
       <section>
         <div className="flex justify-between items-center mb-3">
           <h4 className="font-bold text-gray-800 text-sm">연결된 서비스</h4>
-          <button onClick={handleTestAll} className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1"><RefreshCw size={12}/> 전체 테스트</button>
+          <button onClick={handleTestAll} className="text-xs text-gray-600 hover:text-gray-800 font-bold flex items-center gap-1"><RefreshCw size={12}/> 전체 테스트</button>
         </div>
         <div className="space-y-2">
           {services.map(s => (
