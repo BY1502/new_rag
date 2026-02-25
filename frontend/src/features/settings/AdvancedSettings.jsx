@@ -289,7 +289,7 @@ export default function AdvancedSettings() {
                 apiKeys.some(k => k.provider.toLowerCase() === p.id) ||
                 backendApiKeys.some(bk => bk.provider === p.id)
               );
-              return <><div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-800 rounded-xl p-4 flex gap-3 text-sm text-gray-800 dark:text-gray-300 mb-6"><Info size={20} className="shrink-0"/><div>Ollama 로컬 모델 또는 API 키가 등록된 외부 모델 중 선택하여 대화에 사용할 수 있습니다.</div></div>
+              return <><div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-800 rounded-xl p-4 flex gap-3 text-sm text-gray-800 dark:text-gray-300 mb-6"><Info size={20} className="shrink-0"/><div>에이전트 미선택(기본 모드) 시 사용되는 기본 LLM 모델입니다.<br/><span className="text-xs text-gray-500">에이전트 선택 시 해당 에이전트에 설정된 모델이 우선 적용됩니다.</span></div></div>
               {/* Ollama 로컬 모델 */}
               <section>
                 <div className="flex justify-between items-center mb-2">

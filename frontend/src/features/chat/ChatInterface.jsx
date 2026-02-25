@@ -804,7 +804,7 @@ export default function ChatInterface() {
                         )}
                       </button>
                       <div className="h-px bg-gray-100 dark:bg-gray-700 mx-2 my-1" />
-                      {agents.map((agent) => (
+                      {agents.filter(a => !a.agentType || a.agentType === 'custom').map((agent) => (
                         <button
                           key={agent.id}
                           onClick={() => {
@@ -1158,99 +1158,105 @@ export default function ChatInterface() {
                 >
                   <Brain size={18} />
                 </button>
-                {/* 모델 선택 드롭다운 */}
-                <div className="relative">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsModelMenuOpen(!isModelMenuOpen);
-                      setIsAgentMenuOpen(false);
-                      setIsKbMenuOpen(false);
-                      setIsMcpMenuOpen(false);
-                      setIsDbMenuOpen(false);
-                    }}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-300 transition-colors cursor-pointer border border-gray-200 dark:border-gray-600"
-                    title="모델 변경"
+                {/* 모델 표시/선택 — 에이전트 선택 시 읽기 전용 */}
+                {currentAgent ? (
+                  <div
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono text-gray-400 dark:text-gray-500 border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-default"
+                    title={`에이전트 모델: ${currentAgent.model || config.llm}`}
                   >
-                    <Cpu size={10} className="text-gray-400 shrink-0" />
+                    <Cpu size={10} className="shrink-0" />
                     <span className="max-w-[140px] truncate font-semibold">
-                      {currentAgent?.model || config.llm}
+                      {currentAgent.model || config.llm}
                     </span>
-                    <ChevronDown size={8} className={`transition-transform ${isModelMenuOpen ? "rotate-180" : ""}`} />
-                  </button>
-                  {isModelMenuOpen && (
-                    <div className="absolute bottom-full right-0 mb-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 overflow-hidden">
-                      <div className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                        모델 선택
-                        {currentAgent?.model && (
-                          <span className="ml-1 text-[9px] text-amber-500 normal-case">
-                            (에이전트 설정 우선)
-                          </span>
-                        )}
-                      </div>
-                      <div className="max-h-64 overflow-y-auto custom-scrollbar p-1">
-                        {availableModels.length === 0 ? (
-                          <div className="p-4 text-center text-xs text-gray-400">
-                            사용 가능한 모델이 없습니다.
-                          </div>
-                        ) : (
-                          (() => {
-                            const providerLabels = {
-                              ollama: "🏠 로컬 (Ollama)",
-                              openai: "🤖 OpenAI",
-                              anthropic: "🧠 Anthropic",
-                              google: "🔍 Google AI",
-                              groq: "⚡ Groq",
-                            };
-                            const grouped = {};
-                            availableModels.forEach((m) => {
-                              const p = m.provider || "ollama";
-                              if (!grouped[p]) grouped[p] = [];
-                              grouped[p].push(m);
-                            });
-                            return Object.entries(grouped).map(([provider, models]) => (
-                              <div key={provider}>
-                                <div className="px-3 py-1.5 text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                                  {providerLabels[provider] || provider}
-                                </div>
-                                {models.map((m) => {
-                                  const activeModel = currentAgent?.model || config.llm;
-                                  const isActive = activeModel === m.name;
-                                  return (
-                                    <button
-                                      key={m.name}
-                                      onClick={() => {
-                                        setConfig({ ...config, llm: m.name });
-                                        setIsModelMenuOpen(false);
-                                      }}
-                                      className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition ${
-                                        isActive
-                                          ? "bg-gray-50 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300"
-                                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                      }`}
-                                    >
-                                      <div className="flex-1 min-w-0">
-                                        <div className="text-xs font-semibold truncate flex items-center gap-1">
-                                          {m.display_name || m.name}
-                                          {m.is_korean && (
-                                            <span className="text-[8px] bg-green-50 dark:bg-green-800/30 text-green-600 dark:text-green-300 px-1 py-0.5 rounded font-bold shrink-0">KR</span>
-                                          )}
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsModelMenuOpen(!isModelMenuOpen);
+                        setIsAgentMenuOpen(false);
+                        setIsKbMenuOpen(false);
+                        setIsMcpMenuOpen(false);
+                        setIsDbMenuOpen(false);
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-300 transition-colors cursor-pointer border border-gray-200 dark:border-gray-600"
+                      title="모델 변경"
+                    >
+                      <Cpu size={10} className="text-gray-400 shrink-0" />
+                      <span className="max-w-[140px] truncate font-semibold">
+                        {config.llm}
+                      </span>
+                      <ChevronDown size={8} className={`transition-transform ${isModelMenuOpen ? "rotate-180" : ""}`} />
+                    </button>
+                    {isModelMenuOpen && (
+                      <div className="absolute bottom-full right-0 mb-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 overflow-hidden">
+                        <div className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                          모델 선택
+                        </div>
+                        <div className="max-h-64 overflow-y-auto custom-scrollbar p-1">
+                          {availableModels.length === 0 ? (
+                            <div className="p-4 text-center text-xs text-gray-400">
+                              사용 가능한 모델이 없습니다.
+                            </div>
+                          ) : (
+                            (() => {
+                              const providerLabels = {
+                                ollama: "로컬 (Ollama)",
+                                openai: "OpenAI",
+                                anthropic: "Anthropic",
+                                google: "Google AI",
+                                groq: "Groq",
+                              };
+                              const grouped = {};
+                              availableModels.forEach((m) => {
+                                const p = m.provider || "ollama";
+                                if (!grouped[p]) grouped[p] = [];
+                                grouped[p].push(m);
+                              });
+                              return Object.entries(grouped).map(([provider, models]) => (
+                                <div key={provider}>
+                                  <div className="px-3 py-1.5 text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                    {providerLabels[provider] || provider}
+                                  </div>
+                                  {models.map((m) => {
+                                    const isActive = config.llm === m.name;
+                                    return (
+                                      <button
+                                        key={m.name}
+                                        onClick={() => {
+                                          setConfig({ ...config, llm: m.name });
+                                          setIsModelMenuOpen(false);
+                                        }}
+                                        className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition ${
+                                          isActive
+                                            ? "bg-gray-50 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300"
+                                            : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                        }`}
+                                      >
+                                        <div className="flex-1 min-w-0">
+                                          <div className="text-xs font-semibold truncate flex items-center gap-1">
+                                            {m.display_name || m.name}
+                                            {m.is_korean && (
+                                              <span className="text-[8px] bg-green-50 dark:bg-green-800/30 text-green-600 dark:text-green-300 px-1 py-0.5 rounded font-bold shrink-0">KR</span>
+                                            )}
+                                          </div>
                                         </div>
-                                      </div>
-                                      {isActive && (
-                                        <CheckCircle size={12} className="text-green-500 dark:text-green-400 shrink-0" />
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            ));
-                          })()
-                        )}
+                                        {isActive && (
+                                          <CheckCircle size={12} className="text-green-500 dark:text-green-400 shrink-0" />
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              ));
+                            })()
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => handleSend()}
