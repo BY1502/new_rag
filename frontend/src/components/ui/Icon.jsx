@@ -9,7 +9,8 @@ import {
   Image, HardDrive, RefreshCw, Home, Zap, BarChart3, LayoutDashboard,
   Split, AlignJustify, ArrowLeft, ArrowRight, FolderUp, Share2, Network, GitBranch,
   LogOut, UserCircle, Mail, Moon, Sun,
-  Hash, Minus, Eye, PlusCircle, ChevronLeft, MousePointer, ThumbsUp, ThumbsDown, GraduationCap
+  Hash, Minus, Eye, PlusCircle, ChevronLeft, MousePointer, ThumbsUp, ThumbsDown, GraduationCap,
+  Truck
 } from 'lucide-react';
 
 export {
@@ -23,5 +24,6 @@ export {
   Image, HardDrive, RefreshCw, Home, Zap, BarChart3, LayoutDashboard,
   Split, AlignJustify, ArrowLeft, ArrowRight, FolderUp, Share2, Network, GitBranch,
   LogOut, UserCircle, Mail, Moon, Sun,
-  Hash, Minus, Eye, PlusCircle, ChevronLeft, MousePointer, ThumbsUp, ThumbsDown, GraduationCap
+  Hash, Minus, Eye, PlusCircle, ChevronLeft, MousePointer, ThumbsUp, ThumbsDown, GraduationCap,
+  Truck
 };
