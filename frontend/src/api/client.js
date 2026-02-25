@@ -1289,6 +1289,72 @@ export const finetuningAPI = {
     if (!response.ok) await handleApiError(response);
     return await response.json();
   },
+
+  // 베이스 모델 관리
+  downloadModel: async (modelName) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/finetuning/models/download`,
+      {
+        method: "POST",
+        headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+        body: JSON.stringify({ model_name: modelName }),
+      },
+      120000,
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  getDownloadStatus: async (modelName) => {
+    try {
+      const response = await fetchWithTimeout(
+        `${API_BASE_URL}/finetuning/models/download-status?model_name=${encodeURIComponent(modelName)}`,
+        { headers: { ...getAuthHeader() } },
+      );
+      if (!response.ok) return { status: "unknown" };
+      return await response.json();
+    } catch {
+      return { status: "unknown" };
+    }
+  },
+
+  listBaseModels: async () => {
+    try {
+      const response = await fetchWithTimeout(
+        `${API_BASE_URL}/finetuning/models/base`,
+        { headers: { ...getAuthHeader() } },
+      );
+      if (!response.ok) return { models: [] };
+      return await response.json();
+    } catch {
+      return { models: [] };
+    }
+  },
+
+  setDefaultModel: async (modelName) => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/finetuning/models/set-default`,
+      {
+        method: "POST",
+        headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+        body: JSON.stringify({ model_name: modelName }),
+      },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
+
+  clearDefaultModel: async () => {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/finetuning/models/clear-default`,
+      {
+        method: "POST",
+        headers: { ...getAuthHeader() },
+      },
+    );
+    if (!response.ok) await handleApiError(response);
+    return await response.json();
+  },
 };
 
 export default {

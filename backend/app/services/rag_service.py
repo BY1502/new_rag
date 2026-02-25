@@ -281,10 +281,23 @@ class RAGService:
             search_mode: 검색 모드 (dense, sparse, hybrid)
         """
         try:
+            import time as _time
             effective_top_k = top_k or self.default_top_k
+            tool_calls_log = []  # 도구 호출 기록 (파인튜닝 데이터용)
 
-            # 1. 모델 결정 (프론트 요청 > 환경변수)
-            target_model = model if model else self.default_model
+            # 1. 모델 결정 (프론트 요청 > 사용자 커스텀 모델 > 환경변수)
+            target_model = model  # 프론트에서 명시적 선택
+            if not target_model and db and user_id:
+                try:
+                    from app.crud.user_settings import get_user_settings
+                    user_settings = await get_user_settings(db, user_id)
+                    if user_settings and user_settings.custom_model:
+                        target_model = user_settings.custom_model
+                        logger.info(f"Using user's custom model: {target_model}")
+                except Exception:
+                    pass
+            if not target_model:
+                target_model = self.default_model
             logger.info(f"[RAG] model={target_model}, use_sql={use_sql}, db_conn={db_connection_id}, user={user_id}")
 
             # 매 요청마다 모델을 새로 초기화 (다이나믹 모델 스위칭)
@@ -294,32 +307,40 @@ class RAGService:
             # 2. MCP 도구 컨텍스트 수집
             tool_context = ""
             if active_mcp_ids:
+                _t0 = _time.time()
                 tool_context = await self._execute_mcp_tools(message, active_mcp_ids, use_deep_think, user_id, db)
+                if tool_context:
+                    tool_calls_log.append({
+                        "name": "mcp_tools",
+                        "input": {"message": message, "mcp_ids": active_mcp_ids},
+                        "output": tool_context[:1000],
+                        "duration_ms": int((_time.time() - _t0) * 1000),
+                    })
                 if use_deep_think and tool_context:
                     yield json.dumps({
                         "type": "thinking",
                         "thinking": "MCP 도구 실행 결과를 답변에 반영합니다."
                     }) + "\n"
 
-            # 3. 질문 의도 분석 (Router)
-            route = await self._analyze_intent(message, llm, use_web_search, use_deep_think)
-            logger.info(f"[RAG] route={route}")
+            # 3. 질문 의도 분석 (Router) — 복수 도구 리스트 반환
+            tools = await self._analyze_intent(message, llm, use_web_search, use_deep_think)
+            logger.info(f"[RAG] tools={tools}")
 
             # Deep Think 모드일 때 분석 결과 전송
             if use_deep_think:
+                tools_label = " + ".join(tools)
                 yield json.dumps({
                     "type": "thinking",
-                    "thinking": f"분석 결과: '{route}' 모드로 전략 수립"
+                    "thinking": f"분석 결과: [{tools_label}] 도구 실행 계획 수립"
                 }) + "\n"
 
             # 4. 라우팅에 따른 처리
-            # --- [MODE 1] xLAM Process ---
-            if route == "process":
+            # --- [MODE 1] xLAM Process (단독 실행) ---
+            if tools == ["process"]:
                 yield json.dumps({
                     "type": "thinking",
                     "thinking": "xLAM 자율 에이전트 모드로 전환합니다."
                 }) + "\n"
-                # 순환 임포트 방지
                 from app.services.xlam_service import get_xlam_service
                 xlam_service = get_xlam_service()
                 xlam_llm = await self._get_llm_instance(target_model, user_id, db)
@@ -327,7 +348,7 @@ class RAGService:
                     yield chunk
                 return
 
-            # --- [MODE 4] Text-to-SQL ---
+            # --- [MODE 4] Text-to-SQL (단독 실행) ---
             if use_sql and db_connection_id:
                 logger.info(f"[T2SQL] mode activated: conn={db_connection_id}, model={target_model}")
                 yield json.dumps({
@@ -349,72 +370,95 @@ class RAGService:
                 t2sql = get_t2sql_service()
                 t2sql_llm = await self._get_llm_instance(target_model, user_id, db)
                 logger.info(f"[T2SQL] LLM={type(t2sql_llm).__name__}, executing...")
-                async for chunk in t2sql.generate_and_execute(message, uri, model=target_model, llm_instance=t2sql_llm):
+                async for chunk in t2sql.generate_and_execute(
+                    message, uri, model=target_model, llm_instance=t2sql_llm,
+                    schema_metadata=conn.get("schema_metadata"),
+                ):
                     yield chunk
                 logger.info("[T2SQL] completed")
                 return
 
-            # 5. 컨텍스트 수집
-            context_text = ""
+            # 5. 멀티 도구 실행 루프 (web_search, rag 조합 가능)
+            all_context_parts = []
 
-            # --- [MODE 2] Web Search ---
-            if route == "search":
-                provider = search_provider or "ddg"
-                provider_labels = {"ddg": "DuckDuckGo", "serper": "Google Serper", "brave": "Brave Search", "tavily": "Tavily"}
-                provider_label = provider_labels.get(provider, provider)
+            for tool_name in tools:
+                # --- Web Search ---
+                if tool_name == "web_search":
+                    provider = search_provider or "ddg"
+                    provider_labels = {"ddg": "DuckDuckGo", "serper": "Google Serper", "brave": "Brave Search", "tavily": "Tavily"}
+                    provider_label = provider_labels.get(provider, provider)
 
-                yield json.dumps({
-                    "type": "thinking",
-                    "thinking": f"{provider_label} 웹 검색 중..."
-                }) + "\n"
-
-                context_text = await self._web_search(message, provider, user_id)
-
-                if context_text.startswith("[Web Search Failed]"):
-                    # 검색 실패 시 사용자에게 알림
                     yield json.dumps({
                         "type": "thinking",
-                        "thinking": f"웹 검색 실패: {context_text.replace('[Web Search Failed] ', '')}"
-                    }) + "\n"
-                elif context_text:
-                    yield json.dumps({
-                        "type": "thinking",
-                        "thinking": f"{provider_label} 웹 검색 결과를 기반으로 답변 생성 중..."
+                        "thinking": f"{provider_label} 웹 검색 중..."
                     }) + "\n"
 
-            # --- [MODE 3] RAG ---
-            else:
-                kb_label = ", ".join(kb_ids) if len(kb_ids) <= 3 else f"{len(kb_ids)}개 KB"
-                if use_deep_think:
-                    yield json.dumps({
-                        "type": "thinking",
-                        "thinking": f"지식 베이스({kb_label})에서 관련 문서를 탐색 중... (Top-{effective_top_k})"
-                    }) + "\n"
+                    _t0 = _time.time()
+                    web_ctx = await self._web_search(message, provider, user_id)
+                    tool_calls_log.append({
+                        "name": "web_search",
+                        "input": {"query": message, "provider": provider},
+                        "output": web_ctx[:1000],
+                        "duration_ms": int((_time.time() - _t0) * 1000),
+                    })
 
-                context_text = await self._retrieve_context(
-                    message, kb_ids, user_id,
-                    top_k=effective_top_k,
-                    use_rerank=use_rerank,
-                    search_mode=search_mode,
-                    dense_weight=dense_weight,
-                    use_multimodal_search=use_multimodal_search,
-                    db=db,
-                )
+                    if web_ctx.startswith("[Web Search Failed]"):
+                        yield json.dumps({
+                            "type": "thinking",
+                            "thinking": f"웹 검색 실패: {web_ctx.replace('[Web Search Failed] ', '')}"
+                        }) + "\n"
+                    elif web_ctx:
+                        all_context_parts.append(f"[Web Search Result]\n{web_ctx}")
+                        yield json.dumps({
+                            "type": "thinking",
+                            "thinking": f"{provider_label} 웹 검색 결과 수집 완료"
+                        }) + "\n"
 
-                if context_text:
-                    doc_count = context_text.count("\n\n") + 1
-                    rerank_label = " (Reranked)" if use_rerank else ""
-                    graph_label = " + Graph" if "[Knowledge Graph Context]" in context_text else ""
+                # --- RAG ---
+                elif tool_name == "rag":
+                    kb_label = ", ".join(kb_ids) if len(kb_ids) <= 3 else f"{len(kb_ids)}개 KB"
                     if use_deep_think:
                         yield json.dumps({
                             "type": "thinking",
-                            "thinking": f"문서 {doc_count}개를 참조하여 답변 구성{rerank_label}{graph_label}"
+                            "thinking": f"지식 베이스({kb_label})에서 관련 문서를 탐색 중... (Top-{effective_top_k})"
                         }) + "\n"
-                elif use_deep_think:
-                    yield json.dumps({
-                        "type": "thinking",
-                        "thinking": "관련 문서를 찾지 못했습니다."
-                    }) + "\n"
+
+                    _t0 = _time.time()
+                    rag_ctx = await self._retrieve_context(
+                        message, kb_ids, user_id,
+                        top_k=effective_top_k,
+                        use_rerank=use_rerank,
+                        search_mode=search_mode,
+                        dense_weight=dense_weight,
+                        use_multimodal_search=use_multimodal_search,
+                        db=db,
+                    )
+                    tool_calls_log.append({
+                        "name": "vector_retrieval",
+                        "input": {"query": message, "kb_ids": kb_ids, "top_k": effective_top_k,
+                                  "search_mode": search_mode, "use_rerank": use_rerank},
+                        "output": rag_ctx[:1000] if rag_ctx else "",
+                        "duration_ms": int((_time.time() - _t0) * 1000),
+                    })
+
+                    if rag_ctx:
+                        all_context_parts.append(rag_ctx)
+                        doc_count = rag_ctx.count("\n\n") + 1
+                        rerank_label = " (Reranked)" if use_rerank else ""
+                        graph_label = " + Graph" if "[Knowledge Graph Context]" in rag_ctx else ""
+                        if use_deep_think:
+                            yield json.dumps({
+                                "type": "thinking",
+                                "thinking": f"문서 {doc_count}개를 참조하여 답변 구성{rerank_label}{graph_label}"
+                            }) + "\n"
+                    elif use_deep_think:
+                        yield json.dumps({
+                            "type": "thinking",
+                            "thinking": "관련 문서를 찾지 못했습니다."
+                        }) + "\n"
+
+            # 컨텍스트 합산
+            context_text = "\n\n---\n\n".join(all_context_parts) if all_context_parts else ""
 
             # MCP 도구 결과가 있으면 컨텍스트에 추가
             if tool_context:
@@ -429,7 +473,15 @@ class RAGService:
                 full_response += chunk
                 yield json.dumps({"type": "content", "content": chunk}) + "\n"
 
-            # 7. 자기 검증 (Deep Thinking ON일 때만)
+            # 7. 도구 호출 메타데이터 전송 (파인튜닝 데이터 수집용)
+            if tool_calls_log:
+                yield json.dumps({
+                    "type": "tool_calls_meta",
+                    "tool_calls": tool_calls_log,
+                    "intent": tools,
+                }) + "\n"
+
+            # 8. 자기 검증 (Deep Thinking ON일 때만)
             if use_deep_think and len(full_response) > 50:
                 async for thinking in self._self_reflection(message, full_response, llm):
                     yield thinking
@@ -447,28 +499,35 @@ class RAGService:
         llm: ChatOllama,
         use_web_search: bool,
         use_deep_think: bool
-    ) -> str:
-        """질문 의도 분석"""
-        # 딥 씽킹 꺼져있으면 키워드로 빠르게 판단
+    ) -> list:
+        """질문 의도 분석 — 복수 도구 리스트 반환
+
+        Returns:
+            list[str]: 사용할 도구 목록 (예: ["rag"], ["web_search", "rag"], ["process"])
+        """
+        # 딥 씽킹 꺼져있으면 키워드로 빠르게 판단 (단일 도구)
         if not use_deep_think:
             if use_web_search:
-                return "search"
+                return ["web_search"]
             keywords_process = ["배차", "주문", "루트", "지시", "배송", "물류"]
             if any(k in message for k in keywords_process):
-                return "process"
-            return "rag"
+                return ["process"]
+            return ["rag"]
 
-        # 딥 씽킹: LLM으로 의도 분석
+        # 딥 씽킹: LLM으로 복수 도구 계획 수립
         router_prompt = ChatPromptTemplate.from_template("""
-        Analyze the user's question and choose the best processing mode.
+        Analyze the user's question and determine which tools are needed.
+        Available tools:
+        - 'rag': Search internal documents/knowledge base
+        - 'web_search': Search the web for real-time information
+        - 'process': Execute logistics operations (dispatch, order, route, delivery)
+
+        You can select MULTIPLE tools if the question requires combining information.
+        For example: comparing internal docs with web info needs ["rag", "web_search"].
+
+        Return ONLY a JSON array, e.g.: ["rag"] or ["web_search", "rag"]
+
         Question: {question}
-
-        Modes:
-        - 'process': Logistics/Business execution (dispatch, order, route, delivery).
-        - 'search': Real-time info (weather, news, current events).
-        - 'rag': Document/Manual based Q&A (internal knowledge).
-
-        Return ONLY the mode name (process/search/rag).
         """)
         router_chain = router_prompt | llm | StrOutputParser()
 
@@ -478,15 +537,32 @@ class RAGService:
                 router_chain.ainvoke({"question": message}),
                 timeout=30
             )
-            route = route_result.strip().lower()
-            if route in ["process", "search", "rag"]:
-                return route
+            # JSON 배열 파싱
+            import json as _json
+            cleaned = route_result.strip()
+            # LLM이 ```json ... ``` 등으로 감쌀 경우 처리
+            if "```" in cleaned:
+                cleaned = cleaned.split("```")[1].replace("json", "").strip()
+            tools = _json.loads(cleaned)
+            if isinstance(tools, list) and all(t in ["rag", "web_search", "process"] for t in tools):
+                return tools
+            # 단일 문자열 반환한 경우
+            if isinstance(tools, str) and tools in ["rag", "web_search", "process"]:
+                return [tools]
         except _asyncio.TimeoutError:
             logger.warning("Router timeout (30s)")
         except Exception as e:
-            logger.warning(f"Router failed: {e}")
+            logger.warning(f"Router failed (multi-tool): {e}")
+            # 폴백: 기존 단일 도구 파싱 시도
+            try:
+                route = route_result.strip().lower()
+                for candidate in ["process", "search", "web_search", "rag"]:
+                    if candidate in route:
+                        return ["web_search"] if candidate == "search" else [candidate]
+            except Exception:
+                pass
 
-        return "rag"
+        return ["rag"]
 
     async def _web_search(self, query: str, provider: str = "ddg", user_id: int = 0) -> str:
         """웹 검색 수행 (DuckDuckGo / Serper / Brave / Tavily)"""
@@ -754,19 +830,26 @@ class RAGService:
         return [docs[i] for i in ranked_indices]
 
     def _get_graph_context(self, query: str, kb_ids: List[str], user_id: int) -> str:
-        """각 KB에서 그래프 컨텍스트를 수집하여 합침"""
+        """각 KB에서 그래프 컨텍스트를 수집하여 합침 (임계값 기반 조건부 포함)"""
         try:
             graph_service = get_graph_store_service()
             if not graph_service.ensure_connection():
                 return ""
 
             all_context = []
+            total_matches = 0
             for kb_id in kb_ids:
-                ctx = graph_service.get_graph_context(query, kb_id, user_id)
+                ctx, count = graph_service.get_graph_context(query, kb_id, user_id)
                 if ctx:
                     all_context.append(ctx)
+                    total_matches += count
 
-            return "\n".join(all_context) if all_context else ""
+            min_triples = getattr(settings, 'GRAPH_MIN_TRIPLES', 3)
+            if total_matches < min_triples:
+                logger.debug(f"Graph context skipped: {total_matches} triples < {min_triples}")
+                return ""
+            logger.info(f"Graph context included: {total_matches} triples")
+            return "\n".join(all_context)
         except Exception as e:
             logger.debug(f"Graph context retrieval skipped: {e}")
             return ""

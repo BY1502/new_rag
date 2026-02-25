@@ -24,7 +24,8 @@ from app.schemas.user_settings import UserSettingsResponse, UserSettingsUpdate
 from app.schemas.db_connection import (
     DBConnectionCreate,
     DBConnectionResponse,
-    DBConnectionListResponse
+    DBConnectionListResponse,
+    DBConnectionMetadataUpdate,
 )
 from app.api.deps import get_current_user
 from app.models.user import User
@@ -68,6 +69,7 @@ async def get_db_connection_for_user(user_id: int, conn_id: str) -> dict | None:
             "id": conn.conn_id, "name": conn.name, "db_type": conn.db_type,
             "host": conn.host, "port": conn.port, "database": conn.database,
             "username": conn.username, "password": password,
+            "schema_metadata": conn.schema_metadata,
         }
 
 
@@ -353,6 +355,7 @@ async def create_db_connection(
         db_type=data.db_type, host=data.host, port=data.port,
         database=data.database, username=data.username,
         encrypted_password=encrypted_pw,
+        schema_metadata=data.schema_metadata,
     )
     db.add(conn)
     await db.commit()
@@ -373,7 +376,7 @@ async def list_db_connections(
         DBConnectionResponse(
             id=c.conn_id, name=c.name, db_type=c.db_type,
             host=c.host, port=c.port, database=c.database,
-            username=c.username,
+            username=c.username, schema_metadata=c.schema_metadata,
         )
         for c in rows
     ]
@@ -440,9 +443,30 @@ async def get_db_schema(
         for table_name in sql_db.get_usable_table_names():
             info = sql_db.get_table_info_no_throw([table_name])
             tables.append({"name": table_name, "info": info})
-        return {"tables": tables}
+        return {"tables": tables, "schema_metadata": conn_dict.get("schema_metadata")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"스키마 조회 실패: {e}")
+
+
+@router.put("/db-connections/{conn_id}/metadata")
+async def update_db_metadata(
+    conn_id: str,
+    data: DBConnectionMetadataUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """DB 연결의 비즈니스 메타데이터를 업데이트합니다."""
+    stmt = select(DbConnection).where(
+        DbConnection.user_id == current_user.id, DbConnection.conn_id == conn_id
+    )
+    result = await db.execute(stmt)
+    conn = result.scalar_one_or_none()
+    if not conn:
+        raise HTTPException(status_code=404, detail="연결을 찾을 수 없습니다.")
+    conn.schema_metadata = data.schema_metadata
+    await db.commit()
+    logger.info(f"DB connection metadata updated: {conn.name}")
+    return {"message": f"{conn.name} 메타데이터가 업데이트되었습니다."}
 
 
 # ============================================================

@@ -25,6 +25,9 @@ class UserSettings(Base):
     use_multimodal_search = Column(Boolean, default=False)  # CLIP 멀티모달 검색
     system_prompt = Column(Text, nullable=True)
 
+    # 커스텀 모델 설정
+    custom_model = Column(String(200), nullable=True)  # 사용자 파인튜닝 모델 (Ollama 이름)
+
     # UI 설정
     theme = Column(String(20), default="Light")
 

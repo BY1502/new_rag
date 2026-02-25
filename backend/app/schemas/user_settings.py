@@ -14,6 +14,7 @@ class UserSettingsResponse(BaseModel):
     dense_weight: float = 0.5
     use_multimodal_search: bool
     system_prompt: Optional[str] = None
+    custom_model: Optional[str] = None
     theme: str
     active_search_provider_id: str
     storage_type: str
@@ -35,6 +36,7 @@ class UserSettingsUpdate(BaseModel):
     dense_weight: Optional[float] = Field(None, ge=0.0, le=1.0)
     use_multimodal_search: Optional[bool] = None
     system_prompt: Optional[str] = Field(None, max_length=5000)
+    custom_model: Optional[str] = Field(None, max_length=200)
     theme: Optional[str] = Field(None, pattern=r"^(Light|Dark)$")
     active_search_provider_id: Optional[str] = Field(None, max_length=50)
     storage_type: Optional[str] = Field(None, max_length=20)

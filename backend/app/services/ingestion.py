@@ -286,6 +286,16 @@ class IngestionService:
         '\u00F7'          # ÷ (division)
     )
 
+    # 수식 플레이스홀더
+    _FORMULA_PLACEHOLDER = "[수식]"
+
+    # 유니코드 수학 기호 → ASCII 정규화 매핑
+    _MATH_NORMALIZATIONS = {
+        '\u2264': '<=', '\u2265': '>=', '\u2260': '!=', '\u2248': '~=',
+        '\u221E': 'inf', '\u2211': 'sum', '\u220F': 'prod', '\u222B': 'int',
+        '\u2202': 'd', '\u00B1': '+/-', '\u00D7': '*', '\u00F7': '/',
+    }
+
     @classmethod
     def clean_markdown(cls, text: str) -> str:
         """
@@ -312,6 +322,11 @@ class IngestionService:
         # $...$ 인라인 수식 보존 (유효한 LaTeX만 - 문자/숫자 포함)
         text = re.sub(r'\$[^$\n]{2,}?\$', _save_latex, text)
 
+        # ===== Phase 1.5: LaTeX 블록 외부의 유니코드 수학 기호를 ASCII로 정규화 =====
+        # 이 시점에서 LaTeX 블록은 __LATEX_BLOCK_N__ 플레이스홀더로 치환된 상태
+        for sym, ascii_repr in cls._MATH_NORMALIZATIONS.items():
+            text = text.replace(sym, ascii_repr)
+
         # ===== Phase 2: 깨진 수식 패턴 정리 =====
         # 2a. 동일한 수학 기호가 연속 반복되는 패턴 (≤≤ → ≤, ∫∫∫ → ∫ 등)
         text = re.sub(
@@ -324,27 +339,34 @@ class IngestionService:
         text = re.sub(r'\$\s*\$', '', text)
 
         # 2c. 수학 기호만 공백으로 나열된 패턴 정리 (3개 이상 연속)
-        #     예: "  ≤  ≤  ≤  " → 제거
+        #     예: "  ≤  ≤  ≤  " → [수식] 플레이스홀더
         text = re.sub(
             rf'(\s*[{cls._MATH_SYMBOLS}]\s*){{3,}}',
-            ' ',
+            f' {cls._FORMULA_PLACEHOLDER} ',
             text
         )
 
         # 2d. 줄 전체가 수학 기호/괄호/공백만으로 구성된 경우 (의미없는 수식 잔여물)
-        #     단, 숫자나 알파벳이 포함되어 있으면 유효한 수식일 수 있으므로 보존
+        #     수학 기호 3개 이상인 줄만 플레이스홀더로 대체 (1-2개는 보존)
+        def _replace_formula_line(match):
+            line = match.group(0)
+            math_count = len(re.findall(rf'[{cls._MATH_SYMBOLS}]', line))
+            if math_count >= 3:
+                return cls._FORMULA_PLACEHOLDER
+            return line  # 1-2개는 보존
+
         text = re.sub(
             rf'^[{cls._MATH_SYMBOLS}\s\(\)\[\]{{}}\|_^]+$',
-            '',
+            _replace_formula_line,
             text,
             flags=re.MULTILINE
         )
 
-        # 2e. Docling 특유의 깨진 출력: 공백+기호 반복 패턴
+        # 2e. Docling 특유의 깨진 출력: 공백+기호 반복 패턴 (2개 이상만 대체, 단일 기호 보존)
         #     예: "   ≤≤ \n  ≤≤ "
         text = re.sub(
-            rf'^\s*[{cls._MATH_SYMBOLS}]{{1,3}}\s*$',
-            '',
+            rf'^\s*[{cls._MATH_SYMBOLS}]{{2,3}}\s*$',
+            cls._FORMULA_PLACEHOLDER,
             text,
             flags=re.MULTILINE
         )
@@ -373,7 +395,14 @@ class IngestionService:
 
             lines.append(line)
 
-        return '\n'.join(lines)
+        # 연속된 [수식] 플레이스홀더를 하나로 통합
+        result = '\n'.join(lines)
+        result = re.sub(
+            rf'({re.escape(cls._FORMULA_PLACEHOLDER)}\s*)+',
+            f'{cls._FORMULA_PLACEHOLDER} ',
+            result
+        )
+        return result
 
     async def save_file(self, file: UploadFile, kb_id: str, user_id: int) -> Tuple[str, str]:
         """

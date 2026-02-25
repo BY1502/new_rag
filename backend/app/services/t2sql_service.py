@@ -58,6 +58,7 @@ class T2SQLService:
         connection_uri: str,
         model: Optional[str] = None,
         llm_instance: Any = None,
+        schema_metadata: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         """
         NL → SQL → Execute → Stream results
@@ -114,10 +115,20 @@ class T2SQLService:
             "thinking": "자연어를 SQL로 변환 중..."
         }) + "\n"
 
+        # 비즈니스 메타데이터가 있으면 스키마 컨텍스트에 포함
+        schema_context = schema_info
+        if schema_metadata:
+            schema_context = (
+                "[Business Metadata]\n" + schema_metadata + "\n\n"
+                "[Database Schema (DDL)]\n" + schema_info
+            )
+
         sql_prompt = ChatPromptTemplate.from_template(
-            "You are a SQL expert. Given the database schema below, write a SQL SELECT query "
-            "that answers the user's question. Return ONLY the SQL query, no explanation.\n\n"
-            "[Database Schema]\n{schema}\n\n"
+            "You are a SQL expert. Given the database schema and business metadata below, "
+            "write a SQL SELECT query that answers the user's question. "
+            "Use the metadata to understand column meanings and relationships. "
+            "Return ONLY the SQL query, no explanation.\n\n"
+            "{schema}\n\n"
             "[User Question]\n{question}\n\n"
             "SQL Query:"
         )
@@ -127,7 +138,7 @@ class T2SQLService:
         try:
             raw_sql = await asyncio.wait_for(
                 chain.ainvoke({
-                    "schema": schema_info,
+                    "schema": schema_context,
                     "question": message
                 }),
                 timeout=90

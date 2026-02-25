@@ -155,6 +155,7 @@ class Settings(BaseSettings):
     # ============================================================
     # RAG 설정
     # ============================================================
+    GRAPH_MIN_TRIPLES: int = Field(default=3, ge=0, description="그래프 컨텍스트 포함 최소 트리플 수")
     RAG_TOP_K: int = Field(default=5, ge=1, le=20, description="검색 결과 개수")
     RAG_CHUNK_SIZE: int = Field(default=500, ge=100, le=4000, description="청크 크기")
     RAG_CHUNK_OVERLAP: int = Field(default=50, ge=0, le=500, description="청크 오버랩")
@@ -165,6 +166,18 @@ class Settings(BaseSettings):
     EMBEDDING_DEVICE: str = Field(
         default="auto",
         description="임베딩/리랭커 모델 디바이스 (auto, cpu, cuda). auto는 GPU 여유 메모리를 확인하여 자동 결정"
+    )
+
+    # ============================================================
+    # 파인튜닝 설정
+    # ============================================================
+    MODEL_STORAGE_DIR: str = Field(
+        default="/home/ojt/new_rag/models",
+        description="베이스 모델 및 학습 결과 저장 디렉토리"
+    )
+    FINETUNE_BASE_MODEL: str = Field(
+        default="Qwen/Qwen2.5-3B-Instruct",
+        description="파인튜닝 기본 베이스 모델"
     )
 
     # ============================================================

@@ -45,6 +45,7 @@ async def create_feedback(
         kb_ids=feedback.kb_ids,
         used_web_search=feedback.used_web_search,
         used_deep_think=feedback.used_deep_think,
+        tool_calls_json=feedback.tool_calls_json,
         response_time_ms=feedback.response_time_ms,
         tokens_used=feedback.tokens_used,
     )
@@ -311,7 +312,7 @@ async def build_dataset(
 @router.get("/datasets/{dataset_id}/export")
 async def export_dataset(
     dataset_id: int,
-    format: str = Query("chat", pattern="^(chat|completion|instruction)$"),
+    format: str = Query("chat", pattern="^(chat|completion|instruction|tool_calling)$"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -364,6 +365,9 @@ async def export_dataset(
                     "prompt": fb.user_message,
                     "completion": fb.ai_message,
                 }
+            elif format == "tool_calling":
+                # Qwen2.5 tool calling 학습 데이터 형식
+                entry = _build_tool_calling_entry(fb)
             else:  # instruction
                 # Instruction-tuning format
                 entry = {
@@ -409,3 +413,79 @@ async def delete_dataset(
     await db.commit()
 
     return {"message": "데이터셋이 삭제되었습니다"}
+
+
+# ============================================================
+# 헬퍼 함수
+# ============================================================
+
+def _build_tool_calling_entry(fb) -> dict:
+    """
+    피드백을 Qwen2.5 tool calling 학습 데이터 형식으로 변환합니다.
+
+    형식:
+      system (도구 정의 포함) → user → assistant (tool_calls) → tool (결과) → assistant (최종 답변)
+    """
+    import json
+    import uuid as _uuid
+    from app.services.tool_definitions import get_tool_definitions
+
+    messages = []
+    tool_calls_data = None
+
+    # tool_calls_json 파싱
+    if fb.tool_calls_json:
+        try:
+            tool_calls_data = json.loads(fb.tool_calls_json)
+            if not isinstance(tool_calls_data, list):
+                tool_calls_data = None
+        except (json.JSONDecodeError, TypeError):
+            tool_calls_data = None
+
+    if tool_calls_data:
+        # 사용된 도구 필터링하여 system 메시지에 포함
+        used_tool_names = [tc.get("name") for tc in tool_calls_data if tc.get("name")]
+        tool_defs = get_tool_definitions(filter_names=used_tool_names)
+
+        system_content = (
+            "You are a helpful AI assistant with access to tools. "
+            "Use the provided tools to help answer the user's question.\n"
+            f"<tools>{json.dumps(tool_defs, ensure_ascii=False)}</tools>"
+        )
+        messages.append({"role": "system", "content": system_content})
+        messages.append({"role": "user", "content": fb.user_message})
+
+        # 각 도구 호출을 assistant → tool 턴으로 변환
+        for tc in tool_calls_data:
+            call_id = f"call_{_uuid.uuid4().hex[:8]}"
+            tool_input = tc.get("input", {})
+
+            messages.append({
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{
+                    "id": call_id,
+                    "type": "function",
+                    "function": {
+                        "name": tc["name"],
+                        "arguments": json.dumps(tool_input, ensure_ascii=False),
+                    },
+                }],
+            })
+            messages.append({
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": tc["name"],
+                "content": str(tc.get("output", ""))[:2000],
+            })
+
+        # 최종 assistant 응답
+        messages.append({"role": "assistant", "content": fb.ai_message})
+    else:
+        # 도구 호출 없는 경우 → 일반 chat 형식으로 폴백
+        messages = [
+            {"role": "user", "content": fb.user_message},
+            {"role": "assistant", "content": fb.ai_message},
+        ]
+
+    return {"messages": messages}

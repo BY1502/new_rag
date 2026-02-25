@@ -99,16 +99,20 @@ class GraphStoreService:
             logger.error(f"[Graph] Failed to tag graph nodes: {e}", exc_info=True)
             return False
 
-    def get_graph_context(self, query_text: str, kb_id: str, user_id: int, limit: int = 10) -> str:
-        """질문에서 키워드를 추출하여 관련 그래프 컨텍스트를 반환합니다."""
+    def get_graph_context(self, query_text: str, kb_id: str, user_id: int, limit: int = 10) -> tuple:
+        """질문에서 키워드를 추출하여 관련 그래프 컨텍스트를 반환합니다.
+
+        Returns:
+            tuple[str, int]: (컨텍스트 문자열, 매칭된 트리플 수)
+        """
         self.ensure_connection()
         if not self.graph:
-            return ""
+            return "", 0
 
         # 간단한 키워드 추출 (공백 분리, 2자 이상)
         keywords = [w.strip() for w in query_text.split() if len(w.strip()) >= 2]
         if not keywords:
-            return ""
+            return "", 0
 
         # 상위 5개 키워드만 사용
         keywords = keywords[:5]
@@ -138,14 +142,14 @@ class GraphStoreService:
                         all_triples.append(f"Entity: {entity}")
 
             if not all_triples:
-                return ""
+                return "", 0
 
             # 중복 제거
             unique_triples = list(dict.fromkeys(all_triples))[:20]
-            return "\n".join(unique_triples)
+            return "\n".join(unique_triples), len(unique_triples)
         except Exception as e:
             logger.warning(f"Graph context retrieval failed: {e}")
-            return ""
+            return "", 0
 
     def query(self, query: str, params: dict = None):
         self.ensure_connection()

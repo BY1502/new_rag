@@ -2,11 +2,22 @@ import React, { useState, useEffect } from "react";
 import { feedbackAPI, datasetAPI, finetuningAPI } from "../../api/client";
 import { ThumbsUp, ThumbsDown, Database, Trash2, Plus, Loader2, RefreshCw, Upload, Zap } from "../../components/ui/Icon";
 
+const FORMAT_OPTIONS = [
+  { value: "chat", label: "Chat (OpenAI)", desc: "일반 대화 형식" },
+  { value: "completion", label: "Completion", desc: "텍스트 완성 형식" },
+  { value: "instruction", label: "Instruction", desc: "지시-응답 형식" },
+  { value: "tool_calling", label: "Tool Calling", desc: "도구 호출 학습 형식 (Qwen2.5)" },
+];
+
 export default function DatasetManager() {
   const [feedbacks, setFeedbacks] = useState([]);
   const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ total: 0, has_positive: 0, avg_rating: null });
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newDataset, setNewDataset] = useState({ name: "", format_type: "chat" });
+  const [showExportModal, setShowExportModal] = useState(null);
+  const [exportFormat, setExportFormat] = useState("chat");
 
   useEffect(() => {
     loadData();
@@ -44,17 +55,17 @@ export default function DatasetManager() {
   };
 
   const handleCreateDataset = async () => {
-    const name = prompt("데이터셋 이름을 입력하세요:");
-    if (!name) return;
-
+    if (!newDataset.name.trim()) return;
     try {
       await datasetAPI.create({
-        name,
-        description: "사용자 대화 피드백 데이터",
-        format_type: "chat",
+        name: newDataset.name,
+        description: `사용자 대화 피드백 데이터 (${newDataset.format_type})`,
+        format_type: newDataset.format_type,
         min_rating: 3,
         only_positive: true,
       });
+      setShowCreateModal(false);
+      setNewDataset({ name: "", format_type: "chat" });
       await loadData();
     } catch (error) {
       console.error("데이터셋 생성 실패:", error);
@@ -76,14 +87,9 @@ export default function DatasetManager() {
   };
 
   const handleExportDataset = async (datasetId) => {
-    const format = prompt("내보내기 형식을 선택하세요:\n- chat (OpenAI)\n- completion\n- instruction", "chat");
-    if (!format || !["chat", "completion", "instruction"].includes(format)) {
-      alert("올바른 형식을 입력하세요 (chat, completion, instruction)");
-      return;
-    }
-
     try {
-      await datasetAPI.export(datasetId, format);
+      await datasetAPI.export(datasetId, exportFormat);
+      setShowExportModal(null);
       alert("JSONL 파일 다운로드가 시작되었습니다!");
     } catch (error) {
       console.error("내보내기 실패:", error);
@@ -116,6 +122,14 @@ export default function DatasetManager() {
       console.error("파인튜닝 시작 실패:", error);
       alert("파인튜닝 시작 실패: " + error.message);
     }
+  };
+
+  const parseToolCalls = (toolCallsJson) => {
+    if (!toolCallsJson) return null;
+    try {
+      const calls = typeof toolCallsJson === "string" ? JSON.parse(toolCallsJson) : toolCallsJson;
+      return Array.isArray(calls) ? calls : null;
+    } catch { return null; }
   };
 
   if (loading) {
@@ -159,7 +173,7 @@ export default function DatasetManager() {
               <Database size={20} /> 데이터셋
             </h2>
             <button
-              onClick={handleCreateDataset}
+              onClick={() => setShowCreateModal(true)}
               className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
             >
               <Plus size={16} /> 새 데이터셋
@@ -175,10 +189,21 @@ export default function DatasetManager() {
                   className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg"
                 >
                   <div className="flex-1">
-                    <div className="font-semibold text-gray-900 dark:text-white">{ds.name}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900 dark:text-white">{ds.name}</span>
+                      {ds.format_type && (
+                        <span className={`px-1.5 py-0.5 text-xs rounded font-medium ${
+                          ds.format_type === "tool_calling"
+                            ? "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
+                            : "bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300"
+                        }`}>
+                          {ds.format_type}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-sm text-gray-500 dark:text-gray-400">
                       {ds.total_examples}개 예제 | {ds.verified_examples}개 검증됨
-                      {ds.is_exported && <span className="ml-2 text-green-600">✓ 내보내기 완료</span>}
+                      {ds.is_exported && <span className="ml-2 text-green-600">내보내기 완료</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -190,7 +215,7 @@ export default function DatasetManager() {
                       <RefreshCw size={14} /> 빌드
                     </button>
                     <button
-                      onClick={() => handleExportDataset(ds.id)}
+                      onClick={() => { setExportFormat(ds.format_type || "chat"); setShowExportModal(ds.id); }}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition"
                       title="JSONL 내보내기"
                     >
@@ -218,47 +243,153 @@ export default function DatasetManager() {
           <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">최근 피드백</h2>
           {feedbacks.length === 0 ? (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              피드백이 없습니다. 채팅에서 👍/👎 버튼을 눌러 피드백을 남겨보세요!
+              피드백이 없습니다. 채팅에서 버튼을 눌러 피드백을 남겨보세요!
             </div>
           ) : (
             <div className="space-y-3">
-              {feedbacks.slice(0, 20).map((fb) => (
-                <div
-                  key={fb.id}
-                  className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      {fb.is_positive === true && <ThumbsUp size={14} className="text-green-600" />}
-                      {fb.is_positive === false && <ThumbsDown size={14} className="text-red-600" />}
-                      {fb.rating && (
-                        <span className="text-xs text-yellow-600 dark:text-yellow-400">★ {fb.rating}</span>
-                      )}
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
-                        {new Date(fb.created_at).toLocaleString()}
-                      </span>
+              {feedbacks.slice(0, 20).map((fb) => {
+                const toolCalls = parseToolCalls(fb.tool_calls_json);
+                return (
+                  <div
+                    key={fb.id}
+                    className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {fb.is_positive === true && <ThumbsUp size={14} className="text-green-600" />}
+                        {fb.is_positive === false && <ThumbsDown size={14} className="text-red-600" />}
+                        {fb.rating && (
+                          <span className="text-xs text-yellow-600 dark:text-yellow-400">{fb.rating}</span>
+                        )}
+                        {toolCalls && toolCalls.length > 0 && (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded text-xs">
+                            {toolCalls.map(tc => tc.name).filter((v, i, a) => a.indexOf(v) === i).join(", ")}
+                          </span>
+                        )}
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          {new Date(fb.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteFeedback(fb.id)}
+                        className="text-gray-400 hover:text-red-500 transition"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleDeleteFeedback(fb.id)}
-                      className="text-gray-400 hover:text-red-500 transition"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="text-sm text-gray-600 dark:text-gray-300 mb-1">
+                      <strong>Q:</strong> {fb.user_message.slice(0, 100)}
+                      {fb.user_message.length > 100 && "..."}
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-300">
+                      <strong>A:</strong> {fb.ai_message.slice(0, 100)}
+                      {fb.ai_message.length > 100 && "..."}
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-300 mb-1">
-                    <strong>Q:</strong> {fb.user_message.slice(0, 100)}
-                    {fb.user_message.length > 100 && "..."}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-300">
-                    <strong>A:</strong> {fb.ai_message.slice(0, 100)}
-                    {fb.ai_message.length > 100 && "..."}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       </div>
+
+      {/* 데이터셋 생성 모달 */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md border border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">새 데이터셋 생성</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">이름</label>
+                <input
+                  type="text"
+                  value={newDataset.name}
+                  onChange={(e) => setNewDataset(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="데이터셋 이름"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">형식</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {FORMAT_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setNewDataset(prev => ({ ...prev, format_type: opt.value }))}
+                      className={`p-3 rounded-lg border text-left transition ${
+                        newDataset.format_type === opt.value
+                          ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30"
+                          : "border-gray-200 dark:border-gray-600 hover:border-gray-300"
+                      }`}
+                    >
+                      <div className={`text-sm font-medium ${
+                        newDataset.format_type === opt.value ? "text-indigo-700 dark:text-indigo-300" : "text-gray-900 dark:text-white"
+                      }`}>{opt.label}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleCreateDataset}
+                disabled={!newDataset.name.trim()}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50"
+              >
+                생성
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 내보내기 모달 */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm border border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">내보내기 형식</h3>
+            <div className="space-y-2">
+              {FORMAT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setExportFormat(opt.value)}
+                  className={`w-full p-3 rounded-lg border text-left transition ${
+                    exportFormat === opt.value
+                      ? "border-green-500 bg-green-50 dark:bg-green-900/30"
+                      : "border-gray-200 dark:border-gray-600 hover:border-gray-300"
+                  }`}
+                >
+                  <div className={`text-sm font-medium ${
+                    exportFormat === opt.value ? "text-green-700 dark:text-green-300" : "text-gray-900 dark:text-white"
+                  }`}>{opt.label}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => setShowExportModal(null)}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => handleExportDataset(showExportModal)}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+              >
+                다운로드
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

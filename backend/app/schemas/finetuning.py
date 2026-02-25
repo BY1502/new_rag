@@ -11,8 +11,8 @@ class FineTuningJobCreate(BaseModel):
     dataset_id: int = Field(..., description="학습할 데이터셋 ID")
     job_name: str = Field(..., min_length=1, max_length=200, description="작업 이름")
     base_model: str = Field(..., description="기본 모델 (예: llama3.1, gpt-3.5-turbo)")
-    provider: str = Field(default="ollama", pattern="^(ollama|openai)$")
-    format_type: str = Field(default="chat", pattern="^(chat|completion|instruction)$")
+    provider: str = Field(default="ollama", pattern="^(ollama|unsloth)$")
+    format_type: str = Field(default="chat", pattern="^(chat|completion|instruction|tool_calling)$")
 
     # 하이퍼파라미터
     learning_rate: float = Field(default=2e-5, gt=0, le=1e-3)

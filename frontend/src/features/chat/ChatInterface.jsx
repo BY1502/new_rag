@@ -468,6 +468,22 @@ export default function ChatInterface() {
                   : s,
               ),
             );
+          } else if (chunk.type === "tool_calls_meta") {
+            // 도구 호출 메타데이터를 AI 메시지에 첨부 (파인튜닝 데이터 수집용)
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === activeSessionId
+                  ? {
+                      ...s,
+                      messages: s.messages.map((m) =>
+                        m.id === aiMessageId
+                          ? { ...m, toolCallsMeta: chunk.tool_calls }
+                          : m,
+                      ),
+                    }
+                  : s,
+              ),
+            );
           } else if (chunk.type === "content") {
             accumulatedText += chunk.content;
             const timeElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -583,6 +599,9 @@ export default function ChatInterface() {
         kb_ids: JSON.stringify(selectedKbIds),
         used_web_search: useWebSearch,
         used_deep_think: useDeepThink,
+        tool_calls_json: aiMsg.toolCallsMeta
+          ? JSON.stringify(aiMsg.toolCallsMeta)
+          : null,
       });
     } catch (error) {
       console.error("피드백 저장 실패:", error);

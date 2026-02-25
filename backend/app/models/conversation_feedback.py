@@ -33,6 +33,7 @@ class ConversationFeedback(Base):
     kb_ids = Column(Text, nullable=True)  # JSON array of KB IDs
     used_web_search = Column(Boolean, default=False)
     used_deep_think = Column(Boolean, default=False)
+    tool_calls_json = Column(Text, nullable=True)  # JSON: [{"name":"web_search","input":{...},"output":"...","duration_ms":123}]
 
     # 품질 지표
     response_time_ms = Column(Integer, nullable=True)  # 응답 시간 (밀리초)

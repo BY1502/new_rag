@@ -22,6 +22,7 @@ class DbConnection(Base):
     database = Column(String(255), default="")
     username = Column(String(255), default="")
     encrypted_password = Column(Text, nullable=True)
+    schema_metadata = Column(Text, nullable=True)  # JSON: {"tables": {"orders": {"description": "...", "columns": {...}}}}
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

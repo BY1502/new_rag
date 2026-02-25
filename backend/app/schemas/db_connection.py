@@ -1,6 +1,6 @@
 """DB 연결 관련 스키마"""
 from pydantic import BaseModel, Field
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 
 class DBConnectionCreate(BaseModel):
@@ -11,6 +11,7 @@ class DBConnectionCreate(BaseModel):
     database: str = Field(..., min_length=1, max_length=255, description="데이터베이스명")
     username: str = Field(default="", max_length=255)
     password: str = Field(default="", max_length=255)
+    schema_metadata: Optional[str] = Field(default=None, description="비즈니스 메타데이터 (JSON)")
 
 
 class DBConnectionResponse(BaseModel):
@@ -21,6 +22,11 @@ class DBConnectionResponse(BaseModel):
     port: int
     database: str
     username: str
+    schema_metadata: Optional[str] = None
+
+
+class DBConnectionMetadataUpdate(BaseModel):
+    schema_metadata: str = Field(..., description="비즈니스 메타데이터 (JSON)")
 
 
 class DBConnectionListResponse(BaseModel):

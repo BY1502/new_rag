@@ -566,7 +566,7 @@ export function StoreProvider({ children }) {
         role: msg.role,
         content: msg.content || msg.text || '',
         thinking: msg.thinking || null,
-        metadata_json: null,
+        metadata_json: msg.toolCallsMeta ? JSON.stringify(msg.toolCallsMeta) : null,
       }).catch(e => console.warn('메시지 백엔드 저장 실패:', e));
     }
   }, [currentSessionId]);

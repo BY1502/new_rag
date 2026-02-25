@@ -41,4 +41,10 @@ Pillow>=10.0.0 # ✅ 이미지 처리
 easyocr>=1.7.0 # ✅ 이미지 OCR (텍스트 추출)
 pyhwp # ✅ HWP (한글) 파일 파싱
 httpx # ✅ Ollama 모델 목록 조회 (LLM 자동 감지)
+huggingface_hub # ✅ 모델 다운로드
+datasets # ✅ 학습 데이터셋 로드
+peft>=0.12.0 # ✅ LoRA/QLoRA 파인튜닝
+bitsandbytes>=0.43.0 # ✅ 4-bit 양자화
+trl>=0.9.0 # ✅ SFTTrainer (Supervised Fine-Tuning)
+# unsloth은 별도 설치 필요: pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
 # pinecone # (optional) Pinecone VDB 사용 시: pip install pinecone langchain-pinecone

@@ -1,11 +1,14 @@
 """
 파인튜닝 작업 API 엔드포인트
+- Ollama (few-shot Modelfile)
+- Unsloth (QLoRA 실제 가중치 학습)
 """
 import logging
 import uuid
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +27,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# ============================================================
+# 백그라운드 태스크
+# ============================================================
+
 async def run_finetuning_job(
     job_id: str,
     dataset_id: int,
@@ -32,7 +39,7 @@ async def run_finetuning_job(
     temperature: float,
     db_url: str,
 ):
-    """백그라운드에서 파인튜닝 실행"""
+    """백그라운드에서 Ollama Modelfile 파인튜닝 실행"""
     from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession as AS
     from sqlalchemy.orm import sessionmaker
 
@@ -41,7 +48,6 @@ async def run_finetuning_job(
 
     async with async_session() as db:
         try:
-            # 작업 상태 업데이트: running
             stmt = select(FineTuningJob).where(FineTuningJob.job_id == job_id)
             result = await db.execute(stmt)
             job = result.scalar_one_or_none()
@@ -55,7 +61,6 @@ async def run_finetuning_job(
             job.progress = 10
             await db.commit()
 
-            # 데이터셋 조회
             ds_stmt = select(TrainingDataset).where(TrainingDataset.id == dataset_id)
             ds_result = await db.execute(ds_stmt)
             dataset = ds_result.scalar_one_or_none()
@@ -69,7 +74,6 @@ async def run_finetuning_job(
             job.progress = 30
             await db.commit()
 
-            # Modelfile 생성
             ft_service = FineTuningService()
             modelfile_content = ft_service.generate_modelfile(
                 base_model=base_model,
@@ -83,7 +87,6 @@ async def run_finetuning_job(
             job.progress = 50
             await db.commit()
 
-            # Ollama 모델 생성
             success, message = await ft_service.create_ollama_model(
                 modelfile_path=modelfile_path,
                 output_model_name=output_model_name,
@@ -94,11 +97,9 @@ async def run_finetuning_job(
                 job.output_model_name = output_model_name
                 job.progress = 100
                 job.completed_at = datetime.utcnow()
-
                 if job.started_at:
                     delta = job.completed_at - job.started_at
                     job.training_time_seconds = int(delta.total_seconds())
-
                 logger.info(f"Fine-tuning job {job_id} completed: {output_model_name}")
             else:
                 job.status = "failed"
@@ -116,6 +117,99 @@ async def run_finetuning_job(
     await engine.dispose()
 
 
+async def run_qlora_finetuning_job(
+    job_id: str,
+    dataset_id: int,
+    base_model: str,
+    output_model_name: str,
+    num_epochs: int,
+    learning_rate: float,
+    batch_size: int,
+    db_url: str,
+):
+    """백그라운드에서 QLoRA 파인튜닝 실행"""
+    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession as AS
+    from sqlalchemy.orm import sessionmaker
+    from app.services.qlora_training import run_qlora_training
+
+    engine = create_async_engine(db_url)
+    async_session = sessionmaker(engine, class_=AS, expire_on_commit=False)
+
+    async with async_session() as db:
+        try:
+            stmt = select(FineTuningJob).where(FineTuningJob.job_id == job_id)
+            result = await db.execute(stmt)
+            job = result.scalar_one_or_none()
+
+            if not job:
+                logger.error(f"QLoRA Job {job_id} not found")
+                return
+
+            job.status = "running"
+            job.started_at = datetime.utcnow()
+            job.progress = 10
+            await db.commit()
+
+            # 데이터셋 확인
+            ds_stmt = select(TrainingDataset).where(TrainingDataset.id == dataset_id)
+            ds_result = await db.execute(ds_stmt)
+            dataset = ds_result.scalar_one_or_none()
+
+            if not dataset or not dataset.export_path:
+                job.status = "failed"
+                job.error_message = "데이터셋 파일을 찾을 수 없습니다. 먼저 내보내기를 실행하세요."
+                await db.commit()
+                return
+
+            job.progress = 20
+            await db.commit()
+
+            # QLoRA 학습 실행
+            result = await run_qlora_training(
+                dataset_path=dataset.export_path,
+                base_model=base_model,
+                output_name=output_model_name,
+                num_epochs=num_epochs,
+                learning_rate=learning_rate,
+                batch_size=batch_size,
+            )
+
+            if result["success"]:
+                job.status = "completed"
+                job.output_model_name = output_model_name
+                job.progress = 100
+                job.completed_at = datetime.utcnow()
+                job.adapter_path = result.get("adapter_path")
+                metrics = result.get("metrics", {})
+                job.final_loss = metrics.get("train_loss")
+                if job.started_at:
+                    delta = job.completed_at - job.started_at
+                    job.training_time_seconds = int(delta.total_seconds())
+                logger.info(f"QLoRA job {job_id} completed: {output_model_name}")
+            else:
+                job.status = "failed"
+                job.error_message = result.get("message", "Unknown error")
+                logger.error(f"QLoRA job {job_id} failed: {result.get('message')}")
+
+            await db.commit()
+
+        except Exception as e:
+            logger.exception(f"QLoRA job {job_id} error: {e}")
+            stmt = select(FineTuningJob).where(FineTuningJob.job_id == job_id)
+            result = await db.execute(stmt)
+            job = result.scalar_one_or_none()
+            if job:
+                job.status = "failed"
+                job.error_message = str(e)
+                await db.commit()
+
+    await engine.dispose()
+
+
+# ============================================================
+# 파인튜닝 작업 엔드포인트
+# ============================================================
+
 @router.post("/jobs", response_model=FineTuningJobResponse)
 async def create_finetuning_job(
     job_data: FineTuningJobCreate,
@@ -124,7 +218,6 @@ async def create_finetuning_job(
     db: AsyncSession = Depends(get_db),
 ):
     """파인튜닝 작업 생성 및 시작"""
-    # 데이터셋 확인
     ds_stmt = select(TrainingDataset).where(
         TrainingDataset.id == job_data.dataset_id,
         TrainingDataset.user_id == current_user.id,
@@ -138,11 +231,9 @@ async def create_finetuning_job(
     if dataset.total_examples == 0:
         raise HTTPException(400, "데이터셋이 비어있습니다. 먼저 빌드를 실행하세요.")
 
-    # Job ID 생성
     job_id = f"ft-{uuid.uuid4().hex[:12]}"
     output_model_name = f"{current_user.email.split('@')[0]}_{job_data.job_name}_{job_id[:8]}"
 
-    # 작업 생성
     new_job = FineTuningJob(
         user_id=current_user.id,
         dataset_id=job_data.dataset_id,
@@ -162,10 +253,9 @@ async def create_finetuning_job(
     await db.commit()
     await db.refresh(new_job)
 
-    # 백그라운드에서 학습 실행 (Ollama만 지원)
-    if job_data.provider == "ollama":
-        from app.core.config import settings
+    from app.core.config import settings
 
+    if job_data.provider == "ollama":
         background_tasks.add_task(
             run_finetuning_job,
             job_id=job_id,
@@ -175,12 +265,24 @@ async def create_finetuning_job(
             temperature=job_data.temperature,
             db_url=str(settings.DATABASE_URL),
         )
+    elif job_data.provider == "unsloth":
+        background_tasks.add_task(
+            run_qlora_finetuning_job,
+            job_id=job_id,
+            dataset_id=job_data.dataset_id,
+            base_model=job_data.base_model,
+            output_model_name=output_model_name,
+            num_epochs=job_data.num_epochs,
+            learning_rate=job_data.learning_rate,
+            batch_size=job_data.batch_size,
+            db_url=str(settings.DATABASE_URL),
+        )
     else:
         new_job.status = "failed"
-        new_job.error_message = "OpenAI 파인튜닝은 아직 지원하지 않습니다"
+        new_job.error_message = "지원하지 않는 프로바이더입니다"
         await db.commit()
 
-    logger.info(f"Fine-tuning job created: {job_id} for dataset {job_data.dataset_id}")
+    logger.info(f"Fine-tuning job created: {job_id} (provider={job_data.provider})")
     return new_job
 
 
@@ -197,7 +299,6 @@ async def list_finetuning_jobs(
     )
     result = await db.execute(stmt)
     jobs = result.scalars().all()
-
     return {"jobs": jobs, "total": len(jobs)}
 
 
@@ -214,10 +315,8 @@ async def get_finetuning_job(
     )
     result = await db.execute(stmt)
     job = result.scalar_one_or_none()
-
     if not job:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
-
     return job
 
 
@@ -234,20 +333,16 @@ async def cancel_finetuning_job(
     )
     result = await db.execute(stmt)
     job = result.scalar_one_or_none()
-
     if not job:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
 
-    # 실행 중인 작업은 취소만
     if job.status == "running":
         job.status = "cancelled"
         await db.commit()
         return {"message": "작업이 취소되었습니다"}
 
-    # 완료/실패한 작업은 삭제
     await db.delete(job)
     await db.commit()
-
     return {"message": "작업이 삭제되었습니다"}
 
 
@@ -255,12 +350,85 @@ async def cancel_finetuning_job(
 async def list_custom_models(
     current_user: User = Depends(get_current_user),
 ):
-    """사용자 커스텀 모델 목록"""
+    """사용자 커스텀 모델 목록 (Ollama)"""
     ft_service = FineTuningService()
     all_models = await ft_service.list_ollama_models()
-
-    # 사용자 이메일 프리픽스로 필터링
     user_prefix = current_user.email.split('@')[0]
     custom_models = [m for m in all_models if user_prefix in m]
-
     return {"models": custom_models, "total": len(custom_models)}
+
+
+class SetDefaultModelRequest(BaseModel):
+    model_name: str = Field(..., min_length=1, max_length=200, description="커스텀 모델 이름")
+
+
+@router.post("/models/set-default")
+async def set_default_model(
+    req: SetDefaultModelRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """파인튜닝 모델을 사용자 기본 모델로 설정"""
+    from app.crud.user_settings import get_or_create_settings
+    user_settings = await get_or_create_settings(db, current_user.id)
+    user_settings.custom_model = req.model_name
+    await db.commit()
+    logger.info(f"User {current_user.id} set default model: {req.model_name}")
+    return {"message": f"기본 모델이 {req.model_name}(으)로 설정되었습니다.", "model": req.model_name}
+
+
+@router.post("/models/clear-default")
+async def clear_default_model(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """커스텀 모델 설정 해제 (시스템 기본값으로 복원)"""
+    from app.crud.user_settings import get_or_create_settings
+    user_settings = await get_or_create_settings(db, current_user.id)
+    user_settings.custom_model = None
+    await db.commit()
+    logger.info(f"User {current_user.id} cleared custom model")
+    return {"message": "기본 모델이 시스템 기본값으로 복원되었습니다."}
+
+
+# ============================================================
+# 베이스 모델 관리 엔드포인트
+# ============================================================
+
+class ModelDownloadRequest(BaseModel):
+    model_name: str = Field(default="Qwen/Qwen2.5-3B-Instruct", description="HuggingFace 모델명")
+
+
+@router.post("/models/download")
+async def download_base_model(
+    req: ModelDownloadRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+):
+    """베이스 모델 다운로드 (백그라운드)"""
+    from app.services.model_manager import ModelManager
+
+    if ModelManager.is_downloaded(req.model_name):
+        return {"message": "이미 다운로드되어 있습니다", "status": "done"}
+
+    background_tasks.add_task(ModelManager.download_model, req.model_name)
+    return {"message": f"다운로드가 시작되었습니다: {req.model_name}", "status": "downloading"}
+
+
+@router.get("/models/base")
+async def list_base_models(
+    current_user: User = Depends(get_current_user),
+):
+    """다운로드된 베이스 모델 목록"""
+    from app.services.model_manager import ModelManager
+    return {"models": ModelManager.list_downloaded()}
+
+
+@router.get("/models/download-status")
+async def get_download_status(
+    model_name: str = Query(..., description="모델명"),
+    current_user: User = Depends(get_current_user),
+):
+    """모델 다운로드 상태 조회"""
+    from app.services.model_manager import ModelManager
+    return ModelManager.get_status(model_name)

@@ -24,6 +24,7 @@ class FeedbackCreate(BaseModel):
     kb_ids: Optional[str] = None  # JSON string
     used_web_search: bool = False
     used_deep_think: bool = False
+    tool_calls_json: Optional[str] = Field(None, description="도구 호출 JSON 데이터")
 
     # 품질 지표
     response_time_ms: Optional[int] = None
@@ -57,6 +58,7 @@ class FeedbackResponse(BaseModel):
     kb_ids: Optional[str] = None
     used_web_search: bool
     used_deep_think: bool
+    tool_calls_json: Optional[str] = None
 
     response_time_ms: Optional[int] = None
     tokens_used: Optional[int] = None
@@ -85,7 +87,7 @@ class TrainingDatasetCreate(BaseModel):
     """학습 데이터셋 생성 요청"""
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    format_type: str = Field(default="chat", pattern="^(chat|completion|instruction)$")
+    format_type: str = Field(default="chat", pattern="^(chat|completion|instruction|tool_calling)$")
     min_rating: int = Field(default=3, ge=1, le=5)
     only_positive: bool = True
 
