@@ -1,11 +1,11 @@
 import uuid
 import logging
 from functools import lru_cache
-import torch
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient, models
 from langchain_huggingface import HuggingFaceEmbeddings
 from app.core.config import settings
+from app.core.device import get_device
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +22,8 @@ class VectorStoreService:
         if VectorStoreService._initialized:
             return
 
-        # 디바이스 감지
-        device = "cpu"
-        if torch.cuda.is_available():
-            device = "cuda"
-        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-            device = "mps"
+        # GPU 여유 메모리 확인 후 디바이스 자동 결정
+        device = get_device(model_name=settings.EMBEDDING_MODEL)
 
         self.embeddings = HuggingFaceEmbeddings(
             model_name=settings.EMBEDDING_MODEL,

@@ -43,12 +43,10 @@ class ClipEmbeddings:
 
     @staticmethod
     def _get_device() -> str:
-        """사용 가능한 디바이스 반환"""
-        if torch.cuda.is_available():
-            return "cuda"
-        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-            return "mps"
-        return "cpu"
+        """GPU 여유 메모리 확인 후 디바이스 자동 결정"""
+        from app.core.device import get_device
+        from app.core.config import settings
+        return get_device(model_name=getattr(settings, "CLIP_MODEL", "openai/clip-vit-base-patch32"))
 
     @property
     def clip_available(self) -> bool:

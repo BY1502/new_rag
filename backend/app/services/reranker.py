@@ -11,10 +11,10 @@ import logging
 from functools import lru_cache
 from typing import List, Optional, Tuple
 
-import torch
 from langchain_core.documents import Document
 
 from app.core.config import settings
+from app.core.device import get_device
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +40,8 @@ class RerankerService:
         try:
             from sentence_transformers import CrossEncoder
 
-            # 디바이스 감지
-            device = "cpu"
-            if torch.cuda.is_available():
-                device = "cuda"
-            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                device = "mps"
+            # GPU 여유 메모리 확인 후 디바이스 자동 결정
+            device = get_device(model_name=self.model_name)
 
             logger.info(f"Loading Cross-Encoder reranker: {self.model_name} (device: {device})")
             self.model = CrossEncoder(

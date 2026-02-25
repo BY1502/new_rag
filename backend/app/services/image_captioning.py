@@ -34,20 +34,12 @@ class ImageCaptioningService:
 
     @staticmethod
     def _get_device() -> str:
-        """
-        사용 가능한 디바이스 반환 (CUDA > MPS > CPU 순서로 탐색)
-
-        GPU가 있으면 추론 속도가 10배 이상 빨라집니다.
-        """
+        """GPU 여유 메모리 확인 후 디바이스 자동 결정"""
         try:
-            import torch
-            if torch.cuda.is_available():
-                return "cuda"
-            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-                return "mps"
-        except ImportError:
-            pass
-        return "cpu"
+            from app.core.device import get_device
+            return get_device(model_name="Salesforce/blip-image-captioning-base")
+        except Exception:
+            return "cpu"
 
     def _load_model(self):
         """

@@ -162,6 +162,10 @@ class Settings(BaseSettings):
         default="BAAI/bge-reranker-v2-m3",
         description="Cross-Encoder 리랭커 모델명"
     )
+    EMBEDDING_DEVICE: str = Field(
+        default="auto",
+        description="임베딩/리랭커 모델 디바이스 (auto, cpu, cuda). auto는 GPU 여유 메모리를 확인하여 자동 결정"
+    )
 
     # ============================================================
     # 이미지 저장 설정

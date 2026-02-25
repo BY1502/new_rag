@@ -23,7 +23,6 @@ from functools import lru_cache
 from pathlib import Path
 
 import aiofiles
-import torch
 from fastapi import UploadFile
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -105,12 +104,10 @@ class IngestionService:
 
     @staticmethod
     def _get_device() -> str:
-        """사용 가능한 디바이스 반환"""
-        if torch.cuda.is_available():
-            return "cuda"
-        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-            return "mps"
-        return "cpu"
+        """GPU 여유 메모리 확인 후 디바이스 자동 결정"""
+        from app.core.device import get_device
+        return get_device(model_name=settings.EMBEDDING_MODEL)
+        return configured
 
     @property
     def converter(self):
