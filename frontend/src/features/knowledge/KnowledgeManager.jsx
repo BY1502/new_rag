@@ -5,9 +5,11 @@ import { generateUUID } from '../../utils/uuid';
 import { Upload, FileText, Trash2, CheckCircle, Database, Plus, Settings, AlertCircle, Loader2, Search, Sliders, Info, Brain, AlignJustify, Split, ArrowLeft, FolderUp, Clock, Share2, Network, GitBranch, RefreshCw, Layers, Cpu, Server } from '../../components/ui/Icon';
 import { Modal } from '../../components/ui/Modal';
 import ChunksView from './ChunksView';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function KnowledgeManager() {
   const { knowledgeBases, currentKbId, setCurrentKbId, addFilesToKb, updateFileStatusInKb, updateKbConfig, setKnowledgeBases, removeFileFromKb } = useStore();
+  const { toast, confirm: toastConfirm } = useToast();
   
   const [viewMode, setViewMode] = useState('list');
   const [activeTab, setActiveTab] = useState('files');
@@ -108,7 +110,7 @@ export default function KnowledgeManager() {
   const openConfigModal = () => { if (!currentKb) return; setKbForm({ name: currentKb.name, description: currentKb.description, chunkingMethod: currentKb.chunkingMethod || currentKb.config?.chunkingMethod || 'fixed', chunkSize: currentKb.chunkSize || currentKb.config?.chunkSize || 512, chunkOverlap: currentKb.chunkOverlap || currentKb.config?.chunkOverlap || 50, semanticThreshold: currentKb.semanticThreshold || currentKb.config?.semanticThreshold || 0.75, externalServiceId: currentKb.externalServiceId || '' }); fetchQdrantServices(); setIsConfigOpen(true); };
   
   const handleSaveKb = async (isNew) => {
-    if (!kbForm.name.trim()) return alert('이름을 입력해주세요.');
+    if (!kbForm.name.trim()) return toast.warning('이름을 입력해주세요.');
     const newKbData = { name: kbForm.name, description: kbForm.description, config: { chunkingMethod: kbForm.chunkingMethod, chunkSize: kbForm.chunkSize, chunkOverlap: kbForm.chunkOverlap, semanticThreshold: kbForm.semanticThreshold }, externalServiceId: kbForm.externalServiceId || '' };
     if (isNew) {
       const kbId = generateUUID();
@@ -125,7 +127,7 @@ export default function KnowledgeManager() {
       setIsConfigOpen(false);
     }
   };
-  const handleDeleteKb = () => { if (knowledgeBases.length <= 1) return alert('최소 하나는 있어야 합니다.'); if (confirm('삭제하시겠습니까?')) { const newKbs = knowledgeBases.filter(kb => kb.id !== currentKbId); setKnowledgeBases(newKbs); setCurrentKbId(newKbs[0].id); setViewMode('list'); setIsConfigOpen(false); } };
+  const handleDeleteKb = () => { if (knowledgeBases.length <= 1) return toast.warning('최소 하나는 있어야 합니다.'); toastConfirm('삭제하시겠습니까?', () => { const newKbs = knowledgeBases.filter(kb => kb.id !== currentKbId); setKnowledgeBases(newKbs); setCurrentKbId(newKbs[0].id); setViewMode('list'); setIsConfigOpen(false); }, { confirmLabel: '삭제' }); };
 
   // GraphView는 별도 컴포넌트로 분리
   const GraphView = () => <InteractiveGraphView kbId={currentKbId} />;
@@ -458,6 +460,7 @@ const ALLOWED_LABELS = ['Entity', 'Concept', 'Person', 'Place', 'Event', 'Organi
 const ALLOWED_REL_TYPES = ['RELATION', 'INCLUDES', 'INVOLVES', 'CAUSES', 'RELATED_TO', 'HAS', 'PART_OF'];
 
 function InteractiveGraphView({ kbId }) {
+  const { toast: gToast, confirm: gConfirm } = useToast();
   const svgRef = useRef(null);
   const [graphData, setGraphData] = useState({ nodes: [], edges: [] });
   const [loading, setLoading] = useState(true);
@@ -644,7 +647,7 @@ function InteractiveGraphView({ kbId }) {
       setShowNodeForm(false);
       setNodeForm({ label: 'Entity', name: '', properties: {} });
       await fetchGraph();
-    } catch (e) { alert('노드 생성 실패: ' + (e.message || '')); }
+    } catch (e) { gToast.error('노드 생성 실패: ' + (e.message || '')); }
     finally { setActionLoading(false); }
   };
 
@@ -655,19 +658,21 @@ function InteractiveGraphView({ kbId }) {
       await knowledgeAPI.updateNode(selectedNode.id, { name: editName });
       setSelectedNode(null);
       await fetchGraph();
-    } catch (e) { alert('노드 수정 실패: ' + (e.message || '')); }
+    } catch (e) { gToast.error('노드 수정 실패: ' + (e.message || '')); }
     finally { setActionLoading(false); }
   };
 
   const handleDeleteNode = async () => {
-    if (!selectedNode || !confirm(`"${selectedNode.name}" 노드를 삭제하시겠습니까? 연결된 엣지도 함께 삭제됩니다.`)) return;
-    setActionLoading(true);
-    try {
-      await knowledgeAPI.deleteNode(selectedNode.id);
-      setSelectedNode(null);
-      await fetchGraph();
-    } catch (e) { alert('노드 삭제 실패: ' + (e.message || '')); }
-    finally { setActionLoading(false); }
+    if (!selectedNode) return;
+    gConfirm(`"${selectedNode.name}" 노드를 삭제하시겠습니까? 연결된 엣지도 함께 삭제됩니다.`, async () => {
+      setActionLoading(true);
+      try {
+        await knowledgeAPI.deleteNode(selectedNode.id);
+        setSelectedNode(null);
+        await fetchGraph();
+      } catch (e) { gToast.error('노드 삭제 실패: ' + (e.message || '')); }
+      finally { setActionLoading(false); }
+    }, { confirmLabel: '삭제' });
   };
 
   const handleCreateEdge = async (sourceId, targetId) => {
@@ -676,19 +681,21 @@ function InteractiveGraphView({ kbId }) {
     try {
       await knowledgeAPI.createEdge(kbId, { source_id: sourceId, target_id: targetId, relationship_type: edgeRelType });
       await fetchGraph();
-    } catch (e) { alert('엣지 생성 실패: ' + (e.message || '')); }
+    } catch (e) { gToast.error('엣지 생성 실패: ' + (e.message || '')); }
     finally { setActionLoading(false); setEdgeMode(null); setEdgeSource(null); }
   };
 
   const handleDeleteEdge = async () => {
-    if (!selectedEdge?.id || !confirm('이 관계를 삭제하시겠습니까?')) return;
-    setActionLoading(true);
-    try {
-      await knowledgeAPI.deleteEdge(selectedEdge.id);
-      setSelectedEdge(null);
-      await fetchGraph();
-    } catch (e) { alert('엣지 삭제 실패: ' + (e.message || '')); }
-    finally { setActionLoading(false); }
+    if (!selectedEdge?.id) return;
+    gConfirm('이 관계를 삭제하시겠습니까?', async () => {
+      setActionLoading(true);
+      try {
+        await knowledgeAPI.deleteEdge(selectedEdge.id);
+        setSelectedEdge(null);
+        await fetchGraph();
+      } catch (e) { gToast.error('엣지 삭제 실패: ' + (e.message || '')); }
+      finally { setActionLoading(false); }
+    }, { confirmLabel: '삭제' });
   };
 
   const labels = [...new Set(graphData.nodes.map(n => n.label))];

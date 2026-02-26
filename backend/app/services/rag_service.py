@@ -248,6 +248,7 @@ class RAGService:
         model: Optional[str] = None,
         system_prompt: Optional[str] = None,
         history: Optional[List[dict]] = None,
+        use_rag: bool = True,
         use_web_search: bool = False,
         use_deep_think: bool = False,
         active_mcp_ids: Optional[List[str]] = None,
@@ -312,6 +313,7 @@ class RAGService:
                 model=target_model,
                 system_prompt=system_prompt,
                 history=history,
+                use_rag=use_rag,
                 use_deep_think=use_deep_think,
                 use_web_search=use_web_search,
                 top_k=effective_top_k,
@@ -341,23 +343,32 @@ class RAGService:
         message: str,
         llm: ChatOllama,
         use_web_search: bool,
-        use_deep_think: bool
+        use_deep_think: bool,
+        use_rag: bool = True
     ) -> list:
         """질문 의도 분석 — 복수 도구 리스트 반환
 
         Returns:
             list[str]: 사용할 도구 목록 (예: ["rag"], ["web_search", "rag"], ["process"])
         """
-        # 딥 씽킹 꺼져있으면 키워드로 빠르게 판단 (단일 도구)
+        # 프론트엔드에서 허용한 소스 집합 (Smart Mode 필터링에 사용)
+        allowed_sources = set()
+        if use_rag:
+            allowed_sources.add("rag")
+        if use_web_search:
+            allowed_sources.add("web_search")
+        allowed_sources.add("process")  # process는 항상 허용 (키워드 기반)
+
+        # Smart Mode 꺼져있으면 키워드로 빠르게 판단 (단일 도구)
         if not use_deep_think:
             if use_web_search:
                 return ["web_search"]
             keywords_process = ["배차", "주문", "루트", "지시", "배송", "물류"]
             if any(k in message for k in keywords_process):
                 return ["process"]
-            return ["rag"]
+            return ["rag"] if use_rag else ["rag"]  # 폴백은 항상 rag
 
-        # 딥 씽킹: LLM으로 복수 도구 계획 수립
+        # Smart Mode: LLM으로 복수 도구 계획 수립
         router_prompt = ChatPromptTemplate.from_template("""
         Analyze the user's question and determine which tools are needed.
         Available tools:
@@ -388,10 +399,14 @@ class RAGService:
                 cleaned = cleaned.split("```")[1].replace("json", "").strip()
             tools = _json.loads(cleaned)
             if isinstance(tools, list) and all(t in ["rag", "web_search", "process"] for t in tools):
-                return tools
+                # ★ 핵심: 프론트엔드 소스 플래그로 필터링
+                tools = [t for t in tools if t in allowed_sources]
+                if tools:
+                    return tools
             # 단일 문자열 반환한 경우
             if isinstance(tools, str) and tools in ["rag", "web_search", "process"]:
-                return [tools]
+                if tools in allowed_sources:
+                    return [tools]
         except _asyncio.TimeoutError:
             logger.warning("Router timeout (30s)")
         except Exception as e:
@@ -401,10 +416,17 @@ class RAGService:
                 route = route_result.strip().lower()
                 for candidate in ["process", "search", "web_search", "rag"]:
                     if candidate in route:
-                        return ["web_search"] if candidate == "search" else [candidate]
+                        tool = "web_search" if candidate == "search" else candidate
+                        if tool in allowed_sources:
+                            return [tool]
             except Exception:
                 pass
 
+        # 폴백: 허용된 소스 중 우선순위
+        if use_rag:
+            return ["rag"]
+        if use_web_search:
+            return ["web_search"]
         return ["rag"]
 
     async def _web_search(self, query: str, provider: str = "ddg", user_id: int = 0) -> str:
@@ -524,13 +546,15 @@ class RAGService:
         dense_weight: float = 0.5,
         use_multimodal_search: bool = False,
         db=None,
-    ) -> str:
-        """벡터 DB에서 컨텍스트 검색 (다중 KB, 캐시 적용, Rerank, 멀티모달)"""
+    ) -> tuple:
+        """벡터 DB에서 컨텍스트 검색 (다중 KB, 캐시 적용, Rerank, 멀티모달)
+        Returns: tuple(context_text: str, sources: list[dict])
+        """
         # 캐시 확인 (멀티모달일 때는 캐시 스킵)
         if not use_multimodal_search:
             cached = await self._get_cached_context(query, kb_ids, user_id)
             if cached:
-                return cached
+                return cached, []
 
         all_docs = []
 
@@ -591,7 +615,7 @@ class RAGService:
                     logger.warning(f"Retrieval from KB '{kb_id}' failed: {e}")
 
         if not all_docs:
-            return ""
+            return "", []
 
         # 중복 제거 (내용 해시 기반)
         seen = set()
@@ -621,17 +645,31 @@ class RAGService:
         # top_k로 제한
         final_docs = unique_docs[:top_k]
 
-        # 컨텍스트 텍스트 생성 (이미지는 표시만)
+        # 컨텍스트 텍스트 생성 + 소스 메타데이터 수집
         context_parts = []
-        for doc in final_docs:
+        sources = []
+        for idx, doc in enumerate(final_docs):
+            num = idx + 1
             if doc.metadata.get("content_type") == "image":
-                # 이미지 문서는 경로와 설명만 표시
                 image_path = doc.metadata.get("image_path", "")
                 image_name = doc.metadata.get("source", "unknown")
-                context_parts.append(f"[이미지: {image_name}] (경로: {image_path})")
+                context_parts.append(f"[Source {num}] [이미지: {image_name}] (경로: {image_path})")
+                sources.append({
+                    "id": num,
+                    "filename": image_name,
+                    "chunk_text": f"[이미지] {image_path}",
+                    "score": round(doc.metadata.get("score", 0), 3),
+                    "kb_id": doc.metadata.get("kb_id", ""),
+                })
             else:
-                # 텍스트 문서는 내용 표시
-                context_parts.append(doc.page_content)
+                context_parts.append(f"[Source {num}] {doc.page_content}")
+                sources.append({
+                    "id": num,
+                    "filename": doc.metadata.get("source", doc.metadata.get("filename", "Unknown")),
+                    "chunk_text": doc.page_content[:300],
+                    "score": round(doc.metadata.get("score", 0), 3),
+                    "kb_id": doc.metadata.get("kb_id", ""),
+                })
 
         context_text = "\n\n".join(context_parts)
 
@@ -644,7 +682,7 @@ class RAGService:
         if not use_multimodal_search:
             await self._cache_context(query, kb_ids, user_id, context_text)
 
-        return context_text
+        return context_text, sources
 
     def _rerank_documents(self, query: str, docs: list, top_k: int) -> list:
         """Cross-Encoder 기반 문서 리랭킹 (폴백: 임베딩 유사도)"""

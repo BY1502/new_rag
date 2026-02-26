@@ -1,19 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useStore } from '../contexts/StoreContext';
 import { useAuth } from '../contexts/AuthContext';
 import {
   MessageSquare, Plus, Database, Settings, Trash2,
   FileText as EditIcon, X, CheckCircle, Upload, Bot,
-  Home, LogOut, Sparkles, GraduationCap, ChevronLeft, ChevronRight
+  Home, LogOut, Sparkles, GraduationCap, ChevronLeft, ChevronRight, BookOpen
 } from '../components/ui/Icon';
 import AdvancedSettings from '../features/settings/AdvancedSettings';
 import { Modal } from '../components/ui/Modal';
+import { useToast } from '../contexts/ToastContext';
+import CommandPalette from '../components/CommandPalette';
+import KeyboardShortcuts from '../components/KeyboardShortcuts';
 
 export default function MainLayout() {
   const { user, logout, isAuthenticated } = useAuth();
-  const { sessions, currentSessionId, setCurrentSessionId, createNewSession, renameSession, deleteSession } = useStore();
+  const { sessions, currentSessionId, setCurrentSessionId, createNewSession, renameSession, deleteSession, knowledgeBases, agents, config, setConfig } = useStore();
+  const { confirm } = useToast();
   const [modalType, setModalType] = useState(null);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState(null);
   const [editTitle, setEditTitle] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -21,6 +27,59 @@ export default function MainLayout() {
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  // 글로벌 단축키
+  useEffect(() => {
+    const navRoutes = ['/home', '/chat', '/knowledge', '/agent', '/training', '/guide'];
+    const handler = (e) => {
+      const tag = e.target.tagName;
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable;
+
+      // Ctrl+K: Command Palette
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen(prev => !prev);
+        return;
+      }
+      // Ctrl+N: New chat
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n' && !e.shiftKey) {
+        e.preventDefault();
+        createNewSession();
+        navigate('/chat');
+        return;
+      }
+      // Ctrl+Shift+W/D/S: Feature toggles
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey) {
+        if (e.key === 'W' || e.key === 'w') { e.preventDefault(); setConfig({ ...config, useWebSearch: !config.useWebSearch }); return; }
+        if (e.key === 'D' || e.key === 'd') { e.preventDefault(); setConfig({ ...config, useDeepThink: !config.useDeepThink }); return; }
+        if (e.key === 'S' || e.key === 's') { e.preventDefault(); setConfig({ ...config, useSql: !config.useSql }); return; }
+      }
+      // Alt+1~6: Navigation
+      if (e.altKey && e.key >= '1' && e.key <= '6') {
+        e.preventDefault();
+        navigate(navRoutes[parseInt(e.key) - 1]);
+        return;
+      }
+      // ? key (not in input): Show shortcuts
+      if (!isInput && e.key === '?' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setShortcutsOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [config, navigate, createNewSession, setConfig]);
+
+  const handlePaletteAction = (action) => {
+    if (action === 'new-chat') { createNewSession(); navigate('/chat'); }
+    else if (action.startsWith('navigate:')) navigate(action.split(':')[1]);
+    else if (action.startsWith('session:')) { setCurrentSessionId(action.split(':')[1]); navigate('/chat'); }
+    else if (action.startsWith('agent:')) { navigate('/chat'); }
+    else if (action === 'open-settings') setModalType('settings');
+    else if (action === 'toggle-web') setConfig({ ...config, useWebSearch: !config.useWebSearch });
+    else if (action === 'toggle-deep-think') setConfig({ ...config, useDeepThink: !config.useDeepThink });
+    else if (action === 'toggle-sql') setConfig({ ...config, useSql: !config.useSql });
+  };
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -99,6 +158,12 @@ export default function MainLayout() {
             label="학습"
             active={isView('/training') || isView('/finetuning')}
             onClick={() => navigate('/training')}
+          />
+          <NavTab
+            icon={BookOpen}
+            label="가이드"
+            active={isView('/guide')}
+            onClick={() => navigate('/guide')}
           />
           <NavTab
             icon={Settings}
@@ -223,7 +288,7 @@ export default function MainLayout() {
                             <EditIcon size={13} />
                           </div>
                           <div
-                            onClick={(e) => { e.stopPropagation(); if(confirm('이 대화를 삭제하시겠습니까?')) deleteSession(session.id); }}
+                            onClick={(e) => { e.stopPropagation(); confirm('이 대화를 삭제하시겠습니까?', () => deleteSession(session.id), { confirmLabel: '삭제' }); }}
                             className="p-1.5 hover:text-red-600 hover:bg-red-50 rounded transition-all hover:scale-110 cursor-pointer"
                           >
                             <Trash2 size={13} />
@@ -258,6 +323,19 @@ export default function MainLayout() {
       <Modal isOpen={modalType === 'settings'} onClose={() => setModalType(null)} title="System Settings" size="3xl">
         <AdvancedSettings />
       </Modal>
+
+      {/* Keyboard Shortcuts */}
+      <KeyboardShortcuts isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        sessions={sessions}
+        knowledgeBases={knowledgeBases}
+        agents={agents}
+        onAction={handlePaletteAction}
+      />
     </div>
   );
 }

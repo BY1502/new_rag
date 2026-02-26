@@ -10,23 +10,46 @@ import {
   Send,
   Paperclip,
   ChevronDown,
+  ChevronUp,
+  ArrowDown,
   X,
-  Upload,
   Loader2,
   CheckCircle,
   Database,
-  Plug,
-  Globe,
-  Brain,
   StopCircle,
   FileText,
   Copy,
   RotateCw,
-  HardDrive,
   ThumbsUp,
   ThumbsDown,
-  Cpu,
 } from "../../components/ui/Icon";
+import AgentPipeline from "./AgentPipeline";
+import FollowUpSuggestions from "./FollowUpSuggestions";
+import CitationPopover, { CitationBadge } from "./CitationPopover";
+import AgentContextCard from "./AgentContextCard";
+
+// 코드 블록 복사 버튼 컴포넌트
+function CodeBlockPre({ children, ...props }) {
+  const [copied, setCopied] = useState(false);
+  const codeRef = useRef(null);
+  const handleCopyCode = () => {
+    const text = codeRef.current?.textContent || '';
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <div className="relative group/code">
+      <pre ref={codeRef} {...props}>{children}</pre>
+      <button
+        onClick={handleCopyCode}
+        className="absolute top-2 right-2 p-1.5 rounded-lg bg-gray-700/80 text-gray-300 hover:bg-gray-600 hover:text-white opacity-0 group-hover/code:opacity-100 transition-all text-[10px] flex items-center gap-1"
+      >
+        {copied ? <><CheckCircle size={12} /> 복사됨</> : <><Copy size={12} /> 복사</>}
+      </button>
+    </div>
+  );
+}
 
 const AgentIcon = ({ agentId, size = 12, className = "" }) => {
   switch (agentId) {
@@ -55,6 +78,7 @@ export default function ChatInterface() {
     setSessions,
     currentSessionId,
     sessions,
+    DEFAULT_TOOL_PRESET,
   } = useStore();
 
   const [input, setInput] = useState("");
@@ -90,28 +114,53 @@ export default function ChatInterface() {
   }, [files]);
 
   // UI 상태
-  const [isAgentMenuOpen, setIsAgentMenuOpen] = useState(false);
   const [isKbMenuOpen, setIsKbMenuOpen] = useState(false);
-  const [isMcpMenuOpen, setIsMcpMenuOpen] = useState(false);
 
-  // 기능 토글
-  const [useWebSearch, setUseWebSearch] = useState(false);
-  const [useDeepThink, setUseDeepThink] = useState(false);
+  // Mode + Sources 분리 상태
+  const [modeOverride, setModeOverride] = useState(null);       // null = 에이전트 기본값 사용
+  const [sourceOverrides, setSourceOverrides] = useState({});    // 소스별 오버라이드
   const [activeMcpIds, setActiveMcpIds] = useState([]);
   const [selectedKbIds, setSelectedKbIds] = useState([currentKbId]);
-
-  // 모델 선택
-  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
-  const [availableModels, setAvailableModels] = useState([]);
-
-  // SQL 모드
-  const [useSql, setUseSql] = useState(false);
   const [selectedDbConnectionId, setSelectedDbConnectionId] = useState(null);
   const [dbConnections, setDbConnections] = useState([]);
-  const [isDbMenuOpen, setIsDbMenuOpen] = useState(false);
+
+  // 에이전트 기본값 (Mode + Sources 형식)
+  const agentDefaults = currentAgent?.defaultTools || DEFAULT_TOOL_PRESET || { smartMode: false, sources: { rag: true, web_search: false, mcp: false, sql: false } };
+
+  // 최종 Smart Mode
+  const smartMode = modeOverride ?? agentDefaults.smartMode ?? false;
+
+  // 최종 소스 상태
+  const effectiveSources = useMemo(() => ({
+    rag: sourceOverrides.rag ?? agentDefaults.sources?.rag ?? true,
+    web_search: sourceOverrides.web_search ?? agentDefaults.sources?.web_search ?? false,
+    mcp: sourceOverrides.mcp ?? agentDefaults.sources?.mcp ?? false,
+    sql: sourceOverrides.sql ?? agentDefaults.sources?.sql ?? false,
+  }), [sourceOverrides, agentDefaults]);
+
+  // 글로벌 단축키에서 config 변경 시 동기화
+  useEffect(() => {
+    if (config.useWebSearch !== undefined) {
+      setSourceOverrides(prev => ({ ...prev, web_search: !!config.useWebSearch }));
+    }
+  }, [config.useWebSearch]);
+  useEffect(() => {
+    if (config.useDeepThink !== undefined) {
+      setModeOverride(!!config.useDeepThink);
+    }
+  }, [config.useDeepThink]);
+  useEffect(() => {
+    if (config.useSql !== undefined) {
+      setSourceOverrides(prev => ({ ...prev, sql: !!config.useSql }));
+    }
+  }, [config.useSql]);
 
   // 복사 알림
   const [copiedId, setCopiedId] = useState(null);
+
+  // 스마트 스크롤
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const isNearBottomRef = useRef(true);
 
   const fileInputRef = useRef(null);
   const scrollRef = useRef(null);
@@ -121,17 +170,18 @@ export default function ChatInterface() {
   const toggleKb = (kbId) => {
     setSelectedKbIds((prev) => {
       if (prev.includes(kbId)) {
-        if (prev.length <= 1) return prev;
-        return prev.filter((id) => id !== kbId);
+        return prev.filter((id) => id !== kbId);  // KB 전체 해제 허용
       }
       return [...prev, kbId];
     });
   };
 
   const selectedKbLabel =
-    selectedKbIds.length === 1
-      ? knowledgeBases.find((kb) => kb.id === selectedKbIds[0])?.name || "KB"
-      : `${selectedKbIds.length}개 KB`;
+    selectedKbIds.length === 0
+      ? 'KB 없음'
+      : selectedKbIds.length === 1
+        ? knowledgeBases.find((kb) => kb.id === selectedKbIds[0])?.name || "KB"
+        : `${selectedKbIds.length}개 KB`;
 
   // DB 연결 목록 로드
   useEffect(() => {
@@ -145,24 +195,6 @@ export default function ChatInterface() {
     };
     loadDbConns();
   }, []);
-
-  // 사용 가능한 모델 목록 로드 (마운트 시 + 모델 메뉴 열 때 갱신)
-  const loadAvailableModels = useCallback(async () => {
-    try {
-      const result = await settingsAPI.getAvailableModels();
-      if (result?.models) setAvailableModels(result.models);
-    } catch (e) {
-      /* ignore */
-    }
-  }, []);
-
-  useEffect(() => {
-    loadAvailableModels();
-  }, [loadAvailableModels]);
-
-  useEffect(() => {
-    if (isModelMenuOpen) loadAvailableModels();
-  }, [isModelMenuOpen, loadAvailableModels]);
 
   // currentKbId 또는 knowledgeBases 변경 시 selectedKbIds 동기화
   useEffect(() => {
@@ -179,16 +211,12 @@ export default function ChatInterface() {
 
   useEffect(() => {
     const handleClickOutside = () => {
-      setIsAgentMenuOpen(false);
       setIsKbMenuOpen(false);
-      setIsMcpMenuOpen(false);
-      setIsDbMenuOpen(false);
-      setIsModelMenuOpen(false);
     };
-    if (isAgentMenuOpen || isKbMenuOpen || isMcpMenuOpen || isDbMenuOpen || isModelMenuOpen)
+    if (isKbMenuOpen)
       window.addEventListener("click", handleClickOutside);
     return () => window.removeEventListener("click", handleClickOutside);
-  }, [isAgentMenuOpen, isKbMenuOpen, isMcpMenuOpen, isDbMenuOpen, isModelMenuOpen]);
+  }, [isKbMenuOpen]);
 
   // 세션 전환 시 스트리밍 중단 및 상태 초기화
   useEffect(() => {
@@ -211,11 +239,28 @@ export default function ChatInterface() {
   }, []);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
+    if (isNearBottomRef.current) {
+      scrollRef.current?.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
   }, [currentMessages, isTyping]);
+
+  // 스마트 스크롤 감지
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const threshold = 150;
+    const isNear = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    isNearBottomRef.current = isNear;
+    setShowScrollButton(!isNear && currentMessages.length > 0);
+  }, [currentMessages.length]);
+
+  const scrollToBottom = useCallback(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    setShowScrollButton(false);
+  }, []);
 
   // textarea auto-resize
   const adjustTextarea = useCallback(() => {
@@ -243,12 +288,45 @@ export default function ChatInterface() {
     );
   };
 
+  // 에이전트 변경 시 오버라이드 초기화
+  const handleAgentChange = useCallback((agentId) => {
+    setCurrentAgentId(agentId);
+    setModeOverride(null);
+    setSourceOverrides({});
+    setActiveMcpIds([]);
+    setSelectedDbConnectionId(null);
+  }, [setCurrentAgentId]);
+
+  // 소스 토글 핸들러
+  const handleToggleSource = useCallback((sourceKey) => {
+    setSourceOverrides(prev => {
+      const defaultVal = agentDefaults.sources?.[sourceKey] ?? false;
+      const current = prev[sourceKey] ?? defaultVal;
+      const newVal = !current;
+      if (newVal === defaultVal) {
+        const { [sourceKey]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [sourceKey]: newVal };
+    });
+  }, [agentDefaults]);
+
+  // Smart Mode 토글 핸들러
+  const handleToggleSmartMode = useCallback(() => {
+    setModeOverride(prev => {
+      const defaultVal = agentDefaults.smartMode ?? false;
+      const current = prev ?? defaultVal;
+      const newVal = !current;
+      return newVal === defaultVal ? null : newVal;
+    });
+  }, [agentDefaults]);
+
   const handleSend = async (retryQuery = null) => {
     const query = retryQuery || input;
     if (!query.trim() && files.length === 0) return;
 
     // SQL 모드 검증: DB 미선택 시 전송 차단
-    if (useSql && !selectedDbConnectionId) {
+    if (effectiveSources.sql && !selectedDbConnectionId) {
       addMessage({
         role: "assistant",
         text: "SQL 모드가 활성화되어 있지만 데이터베이스가 선택되지 않았습니다. 먼저 DB를 선택해주세요.",
@@ -370,8 +448,8 @@ export default function ChatInterface() {
     const aiMessageId = generateUUID();
     let accumulatedText = "";
 
-    const initialThinking = useDeepThink
-      ? "사용자의 질문을 심층 분석하고 있습니다..."
+    const initialThinking = smartMode
+      ? "Smart Mode: 최적 소스를 분석하고 있습니다..."
       : null;
 
     addMessage({
@@ -394,10 +472,11 @@ export default function ChatInterface() {
       const chatParams = {
         query: augmentedQuery,
         model: currentAgent?.model || config.llm,
-        kb_ids: selectedKbIds,
-        web_search: useWebSearch,
-        use_deep_think: useDeepThink,
-        active_mcp_ids: activeMcpIds,
+        kb_ids: effectiveSources.rag ? selectedKbIds : [],
+        use_rag: effectiveSources.rag,
+        web_search: effectiveSources.web_search,
+        use_deep_think: smartMode,
+        active_mcp_ids: effectiveSources.mcp ? activeMcpIds : [],
         system_prompt: currentAgent?.systemPrompt || null,
         history: recentHistory,
         top_k: config.searchTopK || null,
@@ -407,8 +486,8 @@ export default function ChatInterface() {
         dense_weight: config.denseWeight ?? 0.5,
         use_multimodal_search: config.useMultimodalSearch || false,
         images: imageBase64List,
-        use_sql: useSql,
-        db_connection_id: selectedDbConnectionId,
+        use_sql: effectiveSources.sql,
+        db_connection_id: effectiveSources.sql ? selectedDbConnectionId : null,
       };
       await streamChat(
         chatParams,
@@ -427,6 +506,30 @@ export default function ChatInterface() {
                           : m,
                       ),
                     }
+                  : s,
+              ),
+            );
+          } else if (chunk.type === "pipeline_plan") {
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === activeSessionId
+                  ? { ...s, messages: s.messages.map((m) => m.id === aiMessageId ? { ...m, pipelineAgents: chunk.agents, completedAgents: {} } : m) }
+                  : s,
+              ),
+            );
+          } else if (chunk.type === "agent_status" && chunk.status === "done") {
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === activeSessionId
+                  ? { ...s, messages: s.messages.map((m) => m.id === aiMessageId ? { ...m, completedAgents: { ...(m.completedAgents || {}), [chunk.agent]: chunk.duration_ms || 0 } } : m) }
+                  : s,
+              ),
+            );
+          } else if (chunk.type === "agent_status" && chunk.status === "active") {
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === activeSessionId
+                  ? { ...s, messages: s.messages.map((m) => m.id === aiMessageId ? { ...m, activeAgent: chunk.agent } : m) }
                   : s,
               ),
             );
@@ -479,6 +582,22 @@ export default function ChatInterface() {
                       messages: s.messages.map((m) =>
                         m.id === aiMessageId
                           ? { ...m, toolCallsMeta: chunk.tool_calls }
+                          : m,
+                      ),
+                    }
+                  : s,
+              ),
+            );
+          } else if (chunk.type === "sources") {
+            // 인용 출처 메타데이터
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === activeSessionId
+                  ? {
+                      ...s,
+                      messages: s.messages.map((m) =>
+                        m.id === aiMessageId
+                          ? { ...m, sources: chunk.sources }
                           : m,
                       ),
                     }
@@ -598,8 +717,8 @@ export default function ChatInterface() {
         agent_id: currentAgent?.id,
         model_name: currentAgent?.model || config.llm,
         kb_ids: JSON.stringify(selectedKbIds),
-        used_web_search: useWebSearch,
-        used_deep_think: useDeepThink,
+        used_web_search: effectiveSources.web_search,
+        used_deep_think: smartMode,
         tool_calls_json: aiMsg.toolCallsMeta
           ? JSON.stringify(aiMsg.toolCallsMeta)
           : null,
@@ -609,19 +728,38 @@ export default function ChatInterface() {
     }
   };
 
-  // 활성 기능 요약
-  const activeFeatures = [];
-  if (useWebSearch) activeFeatures.push("웹 검색");
-  if (useDeepThink) activeFeatures.push("Deep Think");
-  if (useSql) activeFeatures.push("SQL");
-  if (activeMcpIds.length > 0) activeFeatures.push(`MCP ${activeMcpIds.length}`);
+  // 동적 시작 질문
+  const starterQuestions = useMemo(() => {
+    const questions = [];
+    if (effectiveSources.sql) {
+      questions.push("데이터베이스에서 매출 현황을 조회해줘");
+      questions.push("테이블 구조를 보여줘");
+    }
+    if (currentAgent?.systemPrompt) {
+      questions.push(`${currentAgent.name}에게 역할에 대해 물어보기`);
+    }
+    const kbName = knowledgeBases.find(kb => selectedKbIds.includes(kb.id))?.name;
+    if (kbName) {
+      questions.push(`"${kbName}" 문서를 요약해줘`);
+      questions.push(`"${kbName}"에서 핵심 내용을 찾아줘`);
+    }
+    if (effectiveSources.web_search) {
+      questions.push("최신 뉴스를 검색해줘");
+    }
+    const defaults = ["업로드한 문서를 요약해줘", "궁금한 점을 질문해보세요", "데이터를 요약해줘"];
+    while (questions.length < 3) {
+      questions.push(defaults[questions.length]);
+    }
+    return questions.slice(0, 3);
+  }, [effectiveSources, currentAgent, knowledgeBases, selectedKbIds]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 relative bg-gray-50">
       {/* 메시지 리스트 */}
       <div
-        className="flex-1 overflow-y-auto custom-scrollbar scroll-smooth"
+        className="flex-1 overflow-y-auto custom-scrollbar scroll-smooth relative"
         ref={scrollRef}
+        onScroll={handleScroll}
       >
         {currentMessages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-gray-500 gap-6 px-4">
@@ -643,11 +781,7 @@ export default function ChatInterface() {
             </div>
             {/* 추천 질문 */}
             <div className="flex flex-wrap justify-center gap-2 max-w-xl">
-              {[
-                "업로드한 문서를 요약해줘",
-                "이 주제에 대해 설명해줘",
-                "관련 정보를 찾아줘",
-              ].map((q) => (
+              {starterQuestions.map((q) => (
                 <button
                   key={q}
                   onClick={() => {
@@ -683,6 +817,12 @@ export default function ChatInterface() {
                 }
               />
             ))}
+            {/* Follow-up Suggestions */}
+            {!isTyping && currentMessages.length > 0 && currentMessages[currentMessages.length - 1].role === 'assistant' && currentMessages[currentMessages.length - 1].text && (
+              <div className="max-w-[80%] ml-11">
+                <FollowUpSuggestions message={currentMessages[currentMessages.length - 1]} onSend={(text) => handleSend(text)} />
+              </div>
+            )}
             {/* 타이핑 인디케이터 */}
             {isTyping && currentMessages.length > 0 && currentMessages[currentMessages.length - 1].role === "user" && (
               <div className="flex items-start gap-3 py-4">
@@ -703,6 +843,16 @@ export default function ChatInterface() {
         )}
       </div>
 
+      {/* 새 메시지 스크롤 버튼 */}
+      {showScrollButton && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-800 text-xs font-medium rounded-full shadow-lg hover:bg-gray-700 dark:hover:bg-gray-300 transition-all animate-slideUp z-10"
+        >
+          <ArrowDown size={14} /> 새 메시지
+        </button>
+      )}
+
       {/* 입력창 영역 */}
       <div className="border-t border-gray-200 bg-white px-4 py-3">
         <div className="max-w-4xl mx-auto relative">
@@ -717,130 +867,30 @@ export default function ChatInterface() {
             </div>
           )}
 
-          {/* 현재 에이전트 정보 바 */}
-          {currentAgent && (
-            <div className="mb-2 bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 flex items-center gap-3">
-              <div className="w-7 h-7 rounded-lg bg-green-50 border border-green-100 flex items-center justify-center shrink-0">
-                <AgentIcon agentId={currentAgent.id} size={14} className="text-green-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-gray-800">{currentAgent.name}</span>
-                  <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 font-medium flex items-center gap-1">
-                    <Cpu size={9} /> {currentAgent.model || config.llm}
-                  </span>
-                </div>
-                {currentAgent.systemPrompt && (
-                  <p className="text-[10px] text-gray-400 truncate mt-0.5 max-w-md">
-                    {currentAgent.systemPrompt}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
           <div className="bg-white border border-gray-300 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-green-400 focus-within:border-green-400 transition-all flex flex-col relative">
-            {/* 상단 태그 영역 */}
+            {/* 상단: Agent Context Card + KB + 파일 태그 */}
             <div className="px-3 pt-2.5 flex flex-wrap items-center gap-1.5">
-              {/* 에이전트 선택 */}
-              <div className="relative">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsAgentMenuOpen(!isAgentMenuOpen);
-                    setIsKbMenuOpen(false);
-                    setIsMcpMenuOpen(false);
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
-                    currentAgent
-                      ? "bg-green-50 hover:bg-green-100 text-green-700 border border-green-200"
-                      : "bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200"
-                  }`}
-                >
-                  {currentAgent ? (
-                    <AgentIcon agentId={currentAgent.id} size={12} />
-                  ) : (
-                    <Bot size={12} />
-                  )}
-                  <span className="max-w-[100px] truncate">
-                    {currentAgent?.name || "기본 모드"}
-                  </span>
-                  <ChevronDown
-                    size={10}
-                    className={`transition-transform ${isAgentMenuOpen ? "rotate-180" : ""}`}
-                  />
-                </button>
-                {isAgentMenuOpen && (
-                  <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-30 overflow-hidden">
-                    <div className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
-                      에이전트 선택
-                    </div>
-                    <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
-                      {/* 기본 모드 (에이전트 없음) */}
-                      <button
-                        onClick={() => {
-                          setCurrentAgentId(null);
-                          setIsAgentMenuOpen(false);
-                        }}
-                        className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 transition ${
-                          !currentAgent
-                            ? "bg-gray-50 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300"
-                            : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                        }`}
-                      >
-                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
-                          !currentAgent
-                            ? "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
-                            : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
-                        }`}>
-                          <Bot size={13} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-bold truncate">기본 모드</div>
-                          <div className="text-[10px] text-gray-400 dark:text-gray-500 truncate">에이전트 없이 대화</div>
-                        </div>
-                        {!currentAgent && (
-                          <CheckCircle size={12} className="text-green-500 dark:text-green-400 shrink-0" />
-                        )}
-                      </button>
-                      <div className="h-px bg-gray-100 dark:bg-gray-700 mx-2 my-1" />
-                      {agents.filter(a => !a.agentType || a.agentType === 'custom').map((agent) => (
-                        <button
-                          key={agent.id}
-                          onClick={() => {
-                            setCurrentAgentId(agent.id);
-                            setIsAgentMenuOpen(false);
-                          }}
-                          className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 transition ${
-                            currentAgent?.id === agent.id
-                              ? "bg-green-50 dark:bg-green-900/20 text-gray-700 dark:text-gray-300 border border-green-200 dark:border-green-800"
-                              : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-transparent"
-                          }`}
-                        >
-                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
-                            currentAgent?.id === agent.id
-                              ? "bg-green-100 dark:bg-green-800 text-green-600 dark:text-green-300"
-                              : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
-                          }`}>
-                            <AgentIcon agentId={agent.id} size={13} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-bold truncate">{agent.name}</div>
-                            <div className="text-[10px] text-gray-400 dark:text-gray-500 truncate flex items-center gap-1">
-                              <Cpu size={9} /> {agent.model || config.llm}
-                              {agent.systemPrompt && <span className="text-gray-300 dark:text-gray-600 mx-0.5">|</span>}
-                              {agent.systemPrompt && <span className="truncate">{agent.systemPrompt.slice(0, 30)}{agent.systemPrompt.length > 30 ? '...' : ''}</span>}
-                            </div>
-                          </div>
-                          {currentAgent?.id === agent.id && (
-                            <CheckCircle size={12} className="text-green-500 dark:text-green-400 shrink-0" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <AgentContextCard
+                agents={agents}
+                currentAgent={currentAgent}
+                config={config}
+                effectiveSources={effectiveSources}
+                agentDefaults={agentDefaults}
+                sourceOverrides={sourceOverrides}
+                smartMode={smartMode}
+                isModeOverride={modeOverride !== null}
+                onToggleSource={handleToggleSource}
+                onToggleSmartMode={handleToggleSmartMode}
+                onAgentChange={handleAgentChange}
+                mcpServers={mcpServers}
+                activeMcpIds={activeMcpIds}
+                onToggleMcp={toggleMcpServer}
+                dbConnections={dbConnections}
+                selectedDbConnectionId={selectedDbConnectionId}
+                onSelectDb={setSelectedDbConnectionId}
+              />
+
+              <div className="w-px h-5 bg-gray-200" />
 
               {/* 지식 베이스 선택 */}
               <div className="relative">
@@ -848,10 +898,12 @@ export default function ChatInterface() {
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsKbMenuOpen(!isKbMenuOpen);
-                    setIsAgentMenuOpen(false);
-                    setIsMcpMenuOpen(false);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-50 text-green-600 border border-green-100 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
+                    selectedKbIds.length > 0
+                      ? 'bg-green-50 hover:bg-green-100 text-green-600 border border-green-100'
+                      : 'bg-gray-50 hover:bg-gray-100 text-gray-400 border border-gray-200'
+                  }`}
                 >
                   <Database size={12} />
                   <span className="max-w-[120px] truncate">
@@ -937,13 +989,6 @@ export default function ChatInterface() {
                   </div>
                 );
               })}
-
-              {/* 활성 기능 표시 */}
-              {activeFeatures.length > 0 && (
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-1">
-                  {activeFeatures.join(" · ")}
-                </span>
-              )}
             </div>
 
             <textarea
@@ -977,286 +1022,6 @@ export default function ChatInterface() {
                 >
                   <Paperclip size={18} />
                 </button>
-
-                {/* 웹 검색 */}
-                <button
-                  onClick={() => setUseWebSearch(!useWebSearch)}
-                  className={`p-2 rounded-xl transition flex items-center gap-1.5 ${
-                    useWebSearch
-                      ? "bg-green-50 dark:bg-green-900/30 text-green-600"
-                      : "text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600"
-                  }`}
-                  title="웹 검색"
-                >
-                  <Globe size={18} />
-                </button>
-
-                {/* MCP */}
-                <div className="relative">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsMcpMenuOpen(!isMcpMenuOpen);
-                      setIsAgentMenuOpen(false);
-                      setIsKbMenuOpen(false);
-                    }}
-                    className={`p-2 rounded-xl transition flex items-center gap-1.5 ${
-                      activeMcpIds.length > 0 || isMcpMenuOpen
-                        ? "bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-300"
-                        : "text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600"
-                    }`}
-                    title="MCP 도구"
-                  >
-                    <Plug size={18} />
-                  </button>
-
-                  {isMcpMenuOpen && (
-                    <div className="absolute bottom-full left-0 mb-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 overflow-hidden">
-                      <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700">
-                        MCP 도구
-                      </div>
-                      <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
-                        {mcpServers.length === 0 ? (
-                          <div className="p-4 text-center text-xs text-gray-400">
-                            연결된 MCP 서버가 없습니다.
-                            <br />
-                            설정에서 추가해주세요.
-                          </div>
-                        ) : (
-                          mcpServers.map((server) => {
-                            const isActive = activeMcpIds.includes(server.id);
-                            return (
-                              <button
-                                key={server.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleMcpServer(server.id);
-                                }}
-                                className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
-                              >
-                                <div
-                                  className={`w-4 h-4 border-2 rounded flex items-center justify-center transition ${
-                                    isActive
-                                      ? "bg-green-400 border-green-400"
-                                      : "border-gray-300 dark:border-gray-600"
-                                  }`}
-                                >
-                                  {isActive && (
-                                    <CheckCircle
-                                      size={10}
-                                      className="text-white"
-                                    />
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-xs font-bold text-gray-800 dark:text-gray-200 truncate">
-                                    {server.name}
-                                  </div>
-                                  <div className="text-[10px] text-gray-400 truncate">
-                                    {server.status}
-                                  </div>
-                                </div>
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* SQL */}
-                <div className="relative">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!useSql) {
-                        setUseSql(true);
-                        setIsDbMenuOpen(true);
-                      } else {
-                        setUseSql(false);
-                        setSelectedDbConnectionId(null);
-                        setIsDbMenuOpen(false);
-                      }
-                    }}
-                    className={`p-2 rounded-xl transition flex items-center gap-1.5 ${
-                      useSql
-                        ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600"
-                        : "text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600"
-                    }`}
-                    title="SQL 모드"
-                  >
-                    <HardDrive size={18} />
-                  </button>
-
-                  {isDbMenuOpen && (
-                    <div
-                      className="absolute bottom-full left-0 mb-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 overflow-hidden"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
-                        데이터베이스 선택
-                      </div>
-                      <div className="max-h-48 overflow-y-auto p-1">
-                        {dbConnections.length === 0 ? (
-                          <div className="p-4 text-center text-xs text-gray-400">
-                            등록된 DB가 없습니다.
-                            <br />
-                            설정에서 추가해주세요.
-                          </div>
-                        ) : (
-                          dbConnections.map((conn) => (
-                            <button
-                              key={conn.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedDbConnectionId(conn.id);
-                                setIsDbMenuOpen(false);
-                              }}
-                              className={`w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition ${
-                                selectedDbConnectionId === conn.id
-                                  ? "bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300"
-                                  : ""
-                              }`}
-                            >
-                              <Database size={14} className="shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs font-bold truncate">
-                                  {conn.name}
-                                </div>
-                                <div className="text-[10px] text-gray-400 truncate">
-                                  {conn.db_type}
-                                  {conn.db_type !== "sqlite" &&
-                                    ` · ${conn.host}:${conn.port}`}
-                                </div>
-                              </div>
-                              {selectedDbConnectionId === conn.id && (
-                                <CheckCircle
-                                  size={12}
-                                  className="text-orange-600 shrink-0"
-                                />
-                              )}
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
-
-                {/* Deep Think + 모델 */}
-                <button
-                  onClick={() => setUseDeepThink(!useDeepThink)}
-                  className={`p-2 rounded-xl transition ${
-                    useDeepThink
-                      ? "bg-purple-100 dark:bg-purple-900/30 text-purple-600"
-                      : "text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600"
-                  }`}
-                  title="Deep Thinking"
-                >
-                  <Brain size={18} />
-                </button>
-                {/* 모델 표시/선택 — 에이전트 선택 시 읽기 전용 */}
-                {currentAgent ? (
-                  <div
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono text-gray-400 dark:text-gray-500 border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-default"
-                    title={`에이전트 모델: ${currentAgent.model || config.llm}`}
-                  >
-                    <Cpu size={10} className="shrink-0" />
-                    <span className="max-w-[140px] truncate font-semibold">
-                      {currentAgent.model || config.llm}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsModelMenuOpen(!isModelMenuOpen);
-                        setIsAgentMenuOpen(false);
-                        setIsKbMenuOpen(false);
-                        setIsMcpMenuOpen(false);
-                        setIsDbMenuOpen(false);
-                      }}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-300 transition-colors cursor-pointer border border-gray-200 dark:border-gray-600"
-                      title="모델 변경"
-                    >
-                      <Cpu size={10} className="text-gray-400 shrink-0" />
-                      <span className="max-w-[140px] truncate font-semibold">
-                        {config.llm}
-                      </span>
-                      <ChevronDown size={8} className={`transition-transform ${isModelMenuOpen ? "rotate-180" : ""}`} />
-                    </button>
-                    {isModelMenuOpen && (
-                      <div className="absolute bottom-full right-0 mb-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 overflow-hidden">
-                        <div className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                          모델 선택
-                        </div>
-                        <div className="max-h-64 overflow-y-auto custom-scrollbar p-1">
-                          {availableModels.length === 0 ? (
-                            <div className="p-4 text-center text-xs text-gray-400">
-                              사용 가능한 모델이 없습니다.
-                            </div>
-                          ) : (
-                            (() => {
-                              const providerLabels = {
-                                ollama: "로컬 (Ollama)",
-                                openai: "OpenAI",
-                                anthropic: "Anthropic",
-                                google: "Google AI",
-                                groq: "Groq",
-                              };
-                              const grouped = {};
-                              availableModels.forEach((m) => {
-                                const p = m.provider || "ollama";
-                                if (!grouped[p]) grouped[p] = [];
-                                grouped[p].push(m);
-                              });
-                              return Object.entries(grouped).map(([provider, models]) => (
-                                <div key={provider}>
-                                  <div className="px-3 py-1.5 text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                                    {providerLabels[provider] || provider}
-                                  </div>
-                                  {models.map((m) => {
-                                    const isActive = config.llm === m.name;
-                                    return (
-                                      <button
-                                        key={m.name}
-                                        onClick={() => {
-                                          setConfig({ ...config, llm: m.name });
-                                          setIsModelMenuOpen(false);
-                                        }}
-                                        className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition ${
-                                          isActive
-                                            ? "bg-gray-50 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300"
-                                            : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                        }`}
-                                      >
-                                        <div className="flex-1 min-w-0">
-                                          <div className="text-xs font-semibold truncate flex items-center gap-1">
-                                            {m.display_name || m.name}
-                                            {m.is_korean && (
-                                              <span className="text-[8px] bg-green-50 dark:bg-green-800/30 text-green-600 dark:text-green-300 px-1 py-0.5 rounded font-bold shrink-0">KR</span>
-                                            )}
-                                          </div>
-                                        </div>
-                                        {isActive && (
-                                          <CheckCircle size={12} className="text-green-500 dark:text-green-400 shrink-0" />
-                                        )}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              ));
-                            })()
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
               <button
                 onClick={() => handleSend()}
@@ -1292,6 +1057,59 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
   const isCopied = copiedId === msg.id;
   const hasText = msg.text && msg.text.trim().length > 0;
   const thinkingDone = hasText && msg.thinking;
+
+  // 인용 출처 팝오버 상태
+  const [activeCitation, setActiveCitation] = useState(null);
+
+  // Thinking 접기/펼치기
+  const [thinkingExpanded, setThinkingExpanded] = useState(false);
+
+  // [N] 패턴을 CitationBadge로 변환하는 헬퍼
+  const wrapCitations = useCallback((children) => {
+    if (!msg.sources?.length) return children;
+    return React.Children.map(children, child => {
+      if (typeof child === 'string') {
+        const parts = [];
+        let lastIdx = 0;
+        const regex = /\[(\d+)\]/g;
+        let m;
+        while ((m = regex.exec(child)) !== null) {
+          const num = parseInt(m[1]);
+          const src = msg.sources.find(s => s.id === num);
+          if (src) {
+            if (m.index > lastIdx) parts.push(child.slice(lastIdx, m.index));
+            parts.push(
+              <CitationBadge
+                key={`c${num}-${m.index}`}
+                num={num}
+                source={src}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setActiveCitation({ source: src, anchorRect: rect });
+                }}
+              />
+            );
+            lastIdx = regex.lastIndex;
+          }
+        }
+        if (parts.length > 0) {
+          if (lastIdx < child.length) parts.push(child.slice(lastIdx));
+          return parts;
+        }
+      }
+      return child;
+    });
+  }, [msg.sources]);
+
+  // ReactMarkdown 컴포넌트 오버라이드 (인용 + 코드 블록 복사)
+  const markdownComponents = useMemo(() => {
+    const comps = { pre: CodeBlockPre };
+    if (msg.sources?.length) {
+      const wrap = (Tag) => ({ children, node, ...props }) => <Tag {...props}>{wrapCitations(children)}</Tag>;
+      Object.assign(comps, { p: wrap('p'), li: wrap('li'), td: wrap('td'), strong: wrap('strong'), em: wrap('em') });
+    }
+    return comps;
+  }, [msg.sources, wrapCitations]);
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} group py-3`}>
@@ -1361,6 +1179,15 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
             </div>
           )}
 
+          {/* Agent Pipeline Visualization */}
+          {msg.pipelineAgents?.length > 0 && (
+            <AgentPipeline
+              agents={msg.pipelineAgents}
+              activeAgent={msg.activeAgent}
+              completedMap={msg.completedAgents || {}}
+            />
+          )}
+
           {/* Thinking */}
           {msg.thinking && (
             <div className={`text-xs text-gray-500 dark:text-gray-400 italic p-3 rounded-xl border ${
@@ -1368,7 +1195,10 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
                 ? "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
                 : "bg-gray-50/50 dark:bg-gray-900/20 border-gray-100 dark:border-gray-900"
             }`}>
-              <div className="flex items-center gap-2 mb-1.5 font-bold text-[11px]">
+              <div
+                className={`flex items-center gap-2 font-bold text-[11px] ${thinkingDone ? "cursor-pointer select-none" : "mb-1.5"}`}
+                onClick={() => thinkingDone && setThinkingExpanded(!thinkingExpanded)}
+              >
                 {thinkingDone ? (
                   <><CheckCircle size={11} className="text-green-400" /> <span className="text-gray-500">사고 과정</span></>
                 ) : (
@@ -1397,8 +1227,16 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
                     }[msg.activeAgent] || msg.activeAgent}
                   </span>
                 )}
+                {thinkingDone && (
+                  <span className="ml-auto p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition">
+                    {thinkingExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </span>
+                )}
               </div>
-              <div className="pl-4 border-l-2 border-gray-200 dark:border-gray-600 leading-relaxed max-h-32 overflow-y-auto custom-scrollbar">
+              <div className={`pl-4 border-l-2 border-gray-200 dark:border-gray-600 leading-relaxed custom-scrollbar transition-all duration-300 overflow-hidden ${
+                !thinkingDone ? "max-h-32 overflow-y-auto mt-1.5" :
+                thinkingExpanded ? "max-h-[300px] overflow-y-auto mt-1.5" : "max-h-0"
+              }`}>
                 {msg.thinking}
               </div>
             </div>
@@ -1471,7 +1309,7 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
                 <div className="whitespace-pre-wrap">{msg.text}</div>
               ) : (
                 <div className="markdown-body prose prose-sm dark:prose-invert max-w-none prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-code:text-gray-600 dark:prose-code:text-gray-400 prose-code:before:content-none prose-code:after:content-none prose-code:font-mono prose-code:text-xs">
-                  <ReactMarkdown>{msg.text}</ReactMarkdown>
+                  <ReactMarkdown components={markdownComponents}>{msg.text}</ReactMarkdown>
                 </div>
               )}
 
@@ -1482,7 +1320,7 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
 
               {/* 기능 버튼 */}
               {!isUser && !isStreaming && (
-                <div className="absolute -bottom-8 left-0 flex items-center gap-1 opacity-0 group-hover/bubble:opacity-100 transition-opacity">
+                <div className="absolute -bottom-8 left-0 flex items-center gap-1 opacity-0 group-hover/bubble:opacity-100 mobile-always-show transition-opacity">
                   <button
                     onClick={() => onCopy(msg.text, msg.id)}
                     className={`p-1.5 rounded-lg transition text-xs flex items-center gap-1 ${
@@ -1527,6 +1365,35 @@ function MessageBubble({ msg, isLast, isStreaming, copiedId, onCopy, onRegenerat
                 </div>
               )}
             </div>
+          )}
+
+          {/* 인용 출처 요약 */}
+          {!isUser && !isStreaming && msg.sources?.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+              <span className="text-[10px] text-gray-400 font-medium">출처:</span>
+              {msg.sources.map((src) => (
+                <button
+                  key={src.id}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setActiveCitation({ source: src, anchorRect: rect });
+                  }}
+                  className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:text-blue-600 dark:hover:border-blue-700 dark:hover:text-blue-400 transition-colors"
+                >
+                  <FileText size={10} />
+                  <span className="max-w-[120px] truncate">{src.filename}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* 인용 팝오버 */}
+          {activeCitation && (
+            <CitationPopover
+              source={activeCitation.source}
+              anchorRect={activeCitation.anchorRect}
+              onClose={() => setActiveCitation(null)}
+            />
           )}
 
           {/* 첨부파일 */}

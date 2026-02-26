@@ -30,6 +30,7 @@ async def run_orchestrator(
     model: str,
     system_prompt: Optional[str] = None,
     history: Optional[List[dict]] = None,
+    use_rag: bool = True,
     use_deep_think: bool = False,
     use_web_search: bool = False,
     top_k: int = 5,
@@ -62,6 +63,7 @@ async def run_orchestrator(
         "llm": llm,
         "db": db,
         # Config
+        "use_rag": use_rag,
         "use_deep_think": use_deep_think,
         "use_web_search": use_web_search,
         "top_k": top_k,

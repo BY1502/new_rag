@@ -183,3 +183,49 @@
   width: 300px;
   height: 300px;
 }
+
+/* Toast animations */
+@keyframes toastIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes toastOut {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+@keyframes shrinkWidth {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+.animate-toastIn {
+  animation: toastIn 0.3s ease-out;
+}
+.animate-toastOut {
+  animation: toastOut 0.25s ease-in forwards;
+}
+.animate-shrinkWidth {
+  animation: shrinkWidth linear forwards;
+}
+
+/* Pipeline animations */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--glow-color, rgba(74, 222, 128, 0.4)); }
+  50% { box-shadow: 0 0 12px 4px var(--glow-color, rgba(74, 222, 128, 0.4)); }
+}
+@keyframes travelDot {
+  0% { left: 0%; }
+  100% { left: 100%; }
+}
+.animate-pulseGlow {
+  animation: pulseGlow 1.5s ease-in-out infinite;
+}
+.animate-travelDot {
+  animation: travelDot 0.6s ease-in-out;
+}
+
+/* Touch device: always show action buttons */
+@media (hover: none) and (pointer: coarse) {
+  .mobile-always-show {
+    opacity: 1 !important;
+  }
+}

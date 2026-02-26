@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../../contexts/StoreContext';
 import { Settings, Cpu, Globe, Key, Info, Save, Layout, Database, Plug, Plus, Trash2, Link, Server, ArrowUp, ArrowDown, GripVertical, BookOpen, CheckCircle, Image, HardDrive, RefreshCw, Share2, Network, Zap, Moon, Sun, FileText } from '../../components/ui/Icon';
 import { healthAPI, settingsAPI } from '../../api/client';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function AdvancedSettings() {
+  const { toast } = useToast();
   const { config, setConfig, apiKeys, addApiKey, deleteApiKey, mcpServers, addMcpServer, deleteMcpServer, reorderMcpServer, moveMcpServer, searchProviders, agents, updateAgent } = useStore();
   const [activeTab, setActiveTab] = useState('general');
   const [activeModelTab, setActiveModelTab] = useState('llm');
@@ -104,7 +106,7 @@ export default function AdvancedSettings() {
     }, 5000);
   };
 
-  const handleSave = () => { setConfig(localConfig); alert('설정이 저장되었습니다.'); };
+  const handleSave = () => { setConfig(localConfig); toast.success('설정이 저장되었습니다.'); };
   const handleAddKey = async () => {
     if(!newKeyValue.trim()) return;
     // 로컬 저장
@@ -289,6 +291,51 @@ export default function AdvancedSettings() {
                 apiKeys.some(k => k.provider.toLowerCase() === p.id) ||
                 backendApiKeys.some(bk => bk.provider === p.id)
               );
+              const modelInfo = {
+                'gemma3':      { desc: 'Google 경량 모델, 한국어 우수', caps: ['tools', 'vlm'] },
+                'gemma2':      { desc: 'Google 오픈소스, 균형 잡힌 성능', caps: [] },
+                'llama3.3':    { desc: 'Meta 70B급, 최강 오픈소스', caps: ['tools'] },
+                'llama3.2-vision': { desc: 'Meta 경량 멀티모달', caps: ['vlm'] },
+                'llama3.2':    { desc: 'Meta 경량 모델', caps: [] },
+                'llama3.1':    { desc: 'Meta 128K 컨텍스트, 다국어', caps: ['tools', 'long'] },
+                'llama3':      { desc: 'Meta 범용 추론 모델', caps: [] },
+                'mistral-small': { desc: 'Mistral 경량, Tool Calling', caps: ['tools'] },
+                'mistral-large': { desc: 'Mistral 최대 모델', caps: ['tools', 'long'] },
+                'mistral':     { desc: 'Mistral 7B, 빠르고 효율적', caps: [] },
+                'mixtral':     { desc: 'Mistral MoE, 전문가 혼합', caps: [] },
+                'qwen2.5-coder': { desc: 'Alibaba 코딩 특화', caps: ['tools', 'code'] },
+                'qwen2.5':     { desc: 'Alibaba 최신, 한국어 양호', caps: ['tools', 'long'] },
+                'qwen2':       { desc: 'Alibaba 다국어, 코딩 강점', caps: ['tools'] },
+                'phi4':        { desc: 'MS 최신 소형, 추론 특화', caps: ['tools'] },
+                'phi3':        { desc: 'MS 소형 모델, 추론 강점', caps: [] },
+                'deepseek-r1': { desc: 'DeepSeek 추론 체인 모델', caps: ['code', 'math'] },
+                'deepseek-coder': { desc: 'DeepSeek 코딩 전용', caps: ['code'] },
+                'deepseek':    { desc: '코딩/수학 특화 모델', caps: ['code', 'math'] },
+                'codellama':   { desc: 'Meta 코드 생성 전용', caps: ['code'] },
+                'command-r':   { desc: 'Cohere RAG 최적화 모델', caps: ['tools', 'long'] },
+                'solar':       { desc: '업스테이지, 한국어 특화', caps: [] },
+                'exaone':      { desc: 'LG AI 한국어 특화 모델', caps: [] },
+                'llava':       { desc: '오픈소스 비전 모델', caps: ['vlm'] },
+                'bakllava':    { desc: 'BakLLaVA 비전 모델', caps: ['vlm'] },
+                'moondream':   { desc: '초경량 비전 모델', caps: ['vlm'] },
+                'aya':         { desc: 'Cohere 다국어 모델', caps: [] },
+                'granite':     { desc: 'IBM 기업용 모델', caps: ['tools'] },
+                'vicuna':      { desc: 'LMSys 대화형 모델', caps: [] },
+              };
+              const capBadges = {
+                tools: { label: 'Tool Calling', color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300' },
+                vlm:   { label: 'Vision', color: 'bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300' },
+                code:  { label: 'Code', color: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300' },
+                math:  { label: 'Math', color: 'bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300' },
+                long:  { label: '128K+', color: 'bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-300' },
+              };
+              const getModelInfo = (name) => {
+                const lower = name.toLowerCase();
+                for (const [key, info] of Object.entries(modelInfo)) {
+                  if (lower.includes(key)) return info;
+                }
+                return null;
+              };
               return <><div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-800 rounded-xl p-4 flex gap-3 text-sm text-gray-800 dark:text-gray-300 mb-6"><Info size={20} className="shrink-0"/><div>에이전트 미선택(기본 모드) 시 사용되는 기본 LLM 모델입니다.<br/><span className="text-xs text-gray-500">에이전트 선택 시 해당 에이전트에 설정된 모델이 우선 적용됩니다.</span></div></div>
               {/* Ollama 로컬 모델 */}
               <section>
@@ -301,17 +348,25 @@ export default function AdvancedSettings() {
                 {ollamaModelsError && <div className="text-xs text-red-500 mb-2 flex items-center gap-1"><Info size={12}/> {ollamaModelsError}</div>}
                 {ollamaModels.length > 0 ? (
                   <div className="space-y-2">
-                    {ollamaModels.map(m => (
+                    {ollamaModels.map(m => {
+                      const info = getModelInfo(m.name);
+                      return (
                       <div key={m.name} onClick={() => setLocalConfig({...localConfig, llm: m.name})} className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all ${localConfig.llm === m.name ? 'border-green-400 bg-green-50/50 dark:bg-green-900/20 shadow-sm' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${localConfig.llm === m.name ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
                             <Cpu size={16}/>
                           </div>
                           <div>
-                            <div className={`font-bold text-sm ${localConfig.llm === m.name ? 'text-gray-900 dark:text-gray-300' : 'text-gray-800 dark:text-gray-200'}`}>{m.name}</div>
-                            <div className="flex items-center gap-2 mt-0.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`font-bold text-sm ${localConfig.llm === m.name ? 'text-gray-900 dark:text-gray-300' : 'text-gray-800 dark:text-gray-200'}`}>{m.name}</span>
+                              {info?.desc && <span className="text-[10px] text-gray-400 dark:text-gray-500">{info.desc}</span>}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                               <span className="text-[10px] bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-400 font-medium">로컬</span>
                               {m.is_korean && <span className="text-[10px] bg-green-50 dark:bg-green-800/30 px-1.5 py-0.5 rounded text-green-500 dark:text-green-300 font-bold">한국어</span>}
+                              {info?.caps?.map(c => capBadges[c] && (
+                                <span key={c} className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${capBadges[c].color}`}>{capBadges[c].label}</span>
+                              ))}
                               {m.parameter_size && <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-400">{m.parameter_size}</span>}
                               {m.family && <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-400">{m.family}</span>}
                               {m.quantization && <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-400">{m.quantization}</span>}
@@ -323,7 +378,7 @@ export default function AdvancedSettings() {
                           {localConfig.llm === m.name && <CheckCircle size={18} className="text-green-500"/>}
                         </div>
                       </div>
-                    ))}
+                    );})}
                   </div>
                 ) : (
                   <div className="p-6 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl text-center">

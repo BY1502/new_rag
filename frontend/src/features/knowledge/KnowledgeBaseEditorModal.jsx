@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, Database, Settings, Info, Save, Layers, Cpu, Server } from '../../components/ui/Icon';
 import { externalServicesAPI } from '../../api/client';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function KnowledgeBaseEditorModal({ isOpen, onClose, onSave, initialData = null }) {
+  const { toast } = useToast();
   if (!isOpen) return null;
 
   const [formData, setFormData] = useState({
@@ -39,7 +41,7 @@ export default function KnowledgeBaseEditorModal({ isOpen, onClose, onSave, init
   }, [isOpen]);
 
   const handleSubmit = () => {
-    if (!formData.name.trim()) return alert('지식 베이스 이름을 입력해주세요.');
+    if (!formData.name.trim()) return toast.warning('지식 베이스 이름을 입력해주세요.');
     onSave(formData);
     onClose();
   };

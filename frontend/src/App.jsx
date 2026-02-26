@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { StoreProvider } from "./contexts/StoreContext";
 import { AuthProvider } from "./contexts/AuthContext";
+import { ToastProvider } from "./contexts/ToastContext";
 import MainLayout from "./layouts/MainLayout";
 
 // 페이지 컴포넌트
@@ -11,6 +12,7 @@ import AgentList from "./features/agent/AgentList";
 import KnowledgeManager from "./features/knowledge/KnowledgeManager";
 import DatasetManager from "./features/training/DatasetManager";
 import FineTuningMonitor from "./features/training/FineTuningMonitor";
+import ServiceGuide from "./features/guide/ServiceGuide";
 import AuthPage from "./features/auth/AuthPage";
 import Register from "./pages/Register";
 
@@ -18,6 +20,7 @@ export default function App() {
   return (
     <AuthProvider>
       <StoreProvider>
+        <ToastProvider>
         <BrowserRouter>
           <Routes>
             {/* 로그인 & 회원가입 (Public Routes) */}
@@ -47,12 +50,20 @@ export default function App() {
               } />
               <Route path="training" element={<DatasetManager />} />
               <Route path="finetuning" element={<FineTuningMonitor />} />
+              <Route path="guide" element={
+                <div className="flex-1 overflow-hidden p-6 bg-gray-50/50 dark:bg-gray-900 h-full">
+                  <div className="h-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <ServiceGuide />
+                  </div>
+                </div>
+              } />
             </Route>
 
             {/* 그 외 경로는 로그인으로 */}
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </BrowserRouter>
+        </ToastProvider>
       </StoreProvider>
     </AuthProvider>
   );

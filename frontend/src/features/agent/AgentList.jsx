@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../contexts/StoreContext';
+import { useToast } from '../../contexts/ToastContext';
 import AgentEditorModal from './AgentEditorModal';
 import { generateUUID } from '../../utils/uuid';
-import { Plus, Search, Bot, MoreHorizontal, Edit, Trash2, CheckCircle, XCircle, Clock, Lock, Sparkles, FileText, Cpu, MessageSquare, Brain, Globe, Database, Plug, Truck } from '../../components/ui/Icon';
+import { Plus, Search, Bot, MoreHorizontal, Edit, Trash2, CheckCircle, XCircle, Clock, Lock, Sparkles, FileText, Cpu, MessageSquare, Brain, Globe, Database, Plug, Truck, HardDrive } from '../../components/ui/Icon';
 
 // 에이전트 타입별 아이콘 매핑
 const AGENT_TYPE_ICONS = {
@@ -49,6 +50,7 @@ const AGENT_TYPE_BADGE_COLORS = {
 
 export default function AgentList() {
   const { agents, addAgent, updateAgent, deleteAgent } = useStore();
+  const { toast, confirm } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
@@ -85,12 +87,10 @@ export default function AgentList() {
   const handleDelete = (e, id) => {
     e.stopPropagation();
     if (SYSTEM_AGENT_IDS.includes(id)) {
-      alert("시스템 에이전트는 삭제할 수 없습니다.");
+      toast.warning("시스템 에이전트는 삭제할 수 없습니다.");
       return;
     }
-    if (confirm("정말 이 에이전트를 삭제하시겠습니까?")) {
-      deleteAgent(id);
-    }
+    confirm("정말 이 에이전트를 삭제하시겠습니까?", () => deleteAgent(id), { confirmLabel: '삭제' });
   };
 
   const handleTogglePublish = (e, agent) => {
@@ -195,6 +195,27 @@ export default function AgentList() {
             {agent.description || '설명이 없습니다.'}
           </p>
         </div>
+
+        {/* 도구 뱃지 */}
+        {agent.defaultTools && (agent.defaultTools.smartMode || (agent.defaultTools.sources && Object.values(agent.defaultTools.sources).some(v => v))) && (
+          <div className="flex flex-wrap items-center gap-1 mb-3">
+            {agent.defaultTools.smartMode && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-50 text-purple-600 border border-purple-200"><Brain size={9} /> Smart</span>
+            )}
+            {agent.defaultTools.sources?.rag && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-200"><FileText size={9} /> RAG</span>
+            )}
+            {agent.defaultTools.sources?.web_search && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-50 text-green-600 border border-green-200"><Globe size={9} /> Web</span>
+            )}
+            {agent.defaultTools.sources?.mcp && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-200"><Plug size={9} /> MCP</span>
+            )}
+            {agent.defaultTools.sources?.sql && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-600 border border-amber-200"><HardDrive size={9} /> SQL</span>
+            )}
+          </div>
+        )}
 
         {/* 시스템 프롬프트 미리보기 */}
         {agent.systemPrompt ? (

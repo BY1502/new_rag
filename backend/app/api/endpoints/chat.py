@@ -51,6 +51,7 @@ async def chat_stream(
             model=request.model,
             system_prompt=request.system_prompt,
             history=history,
+            use_rag=request.use_rag,
             use_web_search=request.use_web_search,
             use_deep_think=request.use_deep_think,
             active_mcp_ids=request.active_mcp_ids,

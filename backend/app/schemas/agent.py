@@ -16,6 +16,7 @@ class AgentCreate(BaseModel):
     color: str = Field("", max_length=20)
     agent_type: str = Field("custom", max_length=50)
     published: bool = True
+    default_tools: Optional[str] = Field(None, max_length=1000)
 
 
 class AgentUpdate(BaseModel):
@@ -28,6 +29,7 @@ class AgentUpdate(BaseModel):
     agent_type: Optional[str] = Field(None, max_length=50)
     published: Optional[bool] = None
     sort_order: Optional[int] = None
+    default_tools: Optional[str] = Field(None, max_length=1000)
 
 
 class AgentResponse(BaseModel):
@@ -42,6 +44,7 @@ class AgentResponse(BaseModel):
     agent_type: str
     published: bool
     sort_order: int
+    default_tools: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

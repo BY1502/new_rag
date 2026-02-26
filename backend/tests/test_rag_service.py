@@ -130,8 +130,9 @@ class TestRetrieveContext:
         """캐시된 컨텍스트 반환"""
         with patch.object(rag_service, '_get_cached_context', new_callable=AsyncMock) as mock_cache:
             mock_cache.return_value = "cached context"
-            result = await rag_service._retrieve_context("query", "kb1", 1)
+            result, sources = await rag_service._retrieve_context("query", "kb1", 1)
             assert result == "cached context"
+            assert sources == []
 
     @pytest.mark.asyncio
     async def test_returns_empty_when_no_docs(self, rag_service):
@@ -143,8 +144,9 @@ class TestRetrieveContext:
             mock_retriever.ainvoke = AsyncMock(return_value=[])
             rag_service.vector_service.get_retriever = MagicMock(return_value=mock_retriever)
 
-            result = await rag_service._retrieve_context("query", "kb1", 1)
+            result, sources = await rag_service._retrieve_context("query", "kb1", 1)
             assert result == ""
+            assert sources == []
 
 
 class TestGenerateResponse:

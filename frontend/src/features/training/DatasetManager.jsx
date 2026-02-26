@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { feedbackAPI, datasetAPI, finetuningAPI } from "../../api/client";
 import { ThumbsUp, ThumbsDown, Database, Trash2, Plus, Loader2, RefreshCw, Upload, Zap } from "../../components/ui/Icon";
+import { useToast } from "../../contexts/ToastContext";
 
 const FORMAT_OPTIONS = [
   { value: "chat", label: "Chat (OpenAI)", desc: "일반 대화 형식" },
@@ -12,6 +13,7 @@ const FORMAT_OPTIONS = [
 
 export default function DatasetManager() {
   const navigate = useNavigate();
+  const { toast, confirm } = useToast();
   const [feedbacks, setFeedbacks] = useState([]);
   const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,13 +49,14 @@ export default function DatasetManager() {
   };
 
   const handleDeleteFeedback = async (id) => {
-    if (!confirm("이 피드백을 삭제하시겠습니까?")) return;
-    try {
-      await feedbackAPI.delete(id);
-      await loadData();
-    } catch (error) {
-      console.error("피드백 삭제 실패:", error);
-    }
+    confirm("이 피드백을 삭제하시겠습니까?", async () => {
+      try {
+        await feedbackAPI.delete(id);
+        await loadData();
+      } catch (error) {
+        console.error("피드백 삭제 실패:", error);
+      }
+    }, { confirmLabel: '삭제' });
   };
 
   const handleCreateDataset = async () => {
@@ -71,31 +74,31 @@ export default function DatasetManager() {
       await loadData();
     } catch (error) {
       console.error("데이터셋 생성 실패:", error);
-      alert("데이터셋 생성 실패: " + error.message);
+      toast.error("데이터셋 생성 실패: " + error.message);
     }
   };
 
   const handleBuildDataset = async (datasetId) => {
-    if (!confirm("데이터셋을 빌드하시겠습니까? 긍정 평가만 포함됩니다.")) return;
-
-    try {
-      const result = await datasetAPI.build(datasetId);
-      alert(result.message);
-      await loadData();
-    } catch (error) {
-      console.error("데이터셋 빌드 실패:", error);
-      alert("빌드 실패: " + error.message);
-    }
+    confirm("데이터셋을 빌드하시겠습니까? 긍정 평가만 포함됩니다.", async () => {
+      try {
+        const result = await datasetAPI.build(datasetId);
+        toast.success(result.message);
+        await loadData();
+      } catch (error) {
+        console.error("데이터셋 빌드 실패:", error);
+        toast.error("빌드 실패: " + error.message);
+      }
+    }, { confirmLabel: '빌드' });
   };
 
   const handleExportDataset = async (datasetId) => {
     try {
       await datasetAPI.export(datasetId, exportFormat);
       setShowExportModal(null);
-      alert("JSONL 파일 다운로드가 시작되었습니다!");
+      toast.success("JSONL 파일 다운로드가 시작되었습니다!");
     } catch (error) {
       console.error("내보내기 실패:", error);
-      alert("내보내기 실패: " + error.message);
+      toast.error("내보내기 실패: " + error.message);
     }
   };
 
@@ -106,24 +109,22 @@ export default function DatasetManager() {
     const baseModel = prompt("기본 모델을 입력하세요 (예: llama3.1, gemma2):", "llama3.1");
     if (!baseModel) return;
 
-    if (!confirm(`데이터셋으로 ${baseModel} 모델을 파인튜닝하시겠습니까?\n\n이 작업은 시간이 걸릴 수 있습니다.`)) {
-      return;
-    }
-
-    try {
-      const job = await finetuningAPI.createJob({
-        dataset_id: datasetId,
-        job_name: jobName,
-        base_model: baseModel,
-        provider: "ollama",
-        format_type: "chat",
-        num_epochs: 3,
-      });
-      alert(`파인튜닝 작업이 시작되었습니다!\n작업 ID: ${job.job_id}\n\n진행 상황은 파인튜닝 페이지에서 확인할 수 있습니다.`);
-    } catch (error) {
-      console.error("파인튜닝 시작 실패:", error);
-      alert("파인튜닝 시작 실패: " + error.message);
-    }
+    confirm(`데이터셋으로 ${baseModel} 모델을 파인튜닝하시겠습니까?\n\n이 작업은 시간이 걸릴 수 있습니다.`, async () => {
+      try {
+        const job = await finetuningAPI.createJob({
+          dataset_id: datasetId,
+          job_name: jobName,
+          base_model: baseModel,
+          provider: "ollama",
+          format_type: "chat",
+          num_epochs: 3,
+        });
+        toast.success(`파인튜닝 작업이 시작되었습니다! 작업 ID: ${job.job_id}`);
+      } catch (error) {
+        console.error("파인튜닝 시작 실패:", error);
+        toast.error("파인튜닝 시작 실패: " + error.message);
+      }
+    }, { confirmLabel: '시작' });
   };
 
   const parseToolCalls = (toolCallsJson) => {

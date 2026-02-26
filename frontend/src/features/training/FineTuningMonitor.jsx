@@ -2,11 +2,13 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { finetuningAPI, settingsAPI } from "../../api/client";
 import { Loader2, Zap, CheckCircle, XCircle, Clock, Trash2, Cpu, Database } from "../../components/ui/Icon";
+import { useToast } from "../../contexts/ToastContext";
 
 const DEFAULT_BASE_MODEL = "Qwen/Qwen2.5-3B-Instruct";
 
 export default function FineTuningMonitor() {
   const navigate = useNavigate();
+  const { toast, confirm } = useToast();
   const [jobs, setJobs] = useState([]);
   const [customModels, setCustomModels] = useState([]);
   const [baseModels, setBaseModels] = useState([]);
@@ -78,9 +80,10 @@ export default function FineTuningMonitor() {
     try {
       await finetuningAPI.setDefaultModel(modelName);
       setDefaultModel(modelName);
+      toast.success(`${modelName}이(가) 기본 모델로 설정되었습니다.`);
     } catch (error) {
       console.error("기본 모델 설정 실패:", error);
-      alert("기본 모델 설정 실패: " + error.message);
+      toast.error("기본 모델 설정 실패: " + error.message);
     }
   };
 
@@ -88,21 +91,23 @@ export default function FineTuningMonitor() {
     try {
       await finetuningAPI.clearDefaultModel();
       setDefaultModel(null);
+      toast.success("기본 모델이 해제되었습니다.");
     } catch (error) {
       console.error("기본 모델 해제 실패:", error);
-      alert("기본 모델 해제 실패: " + error.message);
+      toast.error("기본 모델 해제 실패: " + error.message);
     }
   };
 
   const handleCancelJob = async (jobId) => {
-    if (!confirm("이 작업을 취소/삭제하시겠습니까?")) return;
-    try {
-      await finetuningAPI.cancelJob(jobId);
-      await loadData();
-    } catch (error) {
-      console.error("작업 취소 실패:", error);
-      alert("작업 취소 실패: " + error.message);
-    }
+    confirm("이 작업을 취소/삭제하시겠습니까?", async () => {
+      try {
+        await finetuningAPI.cancelJob(jobId);
+        await loadData();
+      } catch (error) {
+        console.error("작업 취소 실패:", error);
+        toast.error("작업 취소 실패: " + error.message);
+      }
+    }, { confirmLabel: '취소/삭제' });
   };
 
   const getStatusColor = (status) => {

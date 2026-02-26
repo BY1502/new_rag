@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext'; // register 함수 가정
+import { useToast } from '../contexts/ToastContext';
 import { Bot, Loader2, User, Mail, Lock } from '../components/ui/Icon';
 
 export default function Register() {
@@ -11,6 +12,7 @@ export default function Register() {
   const [error, setError] = useState('');
   
   const { register } = useAuth(); // AuthContext에 register가 있다고 가정
+  const { toast } = useToast();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -21,11 +23,10 @@ export default function Register() {
     try {
       if (register) {
         await register(name, email, password);
-        alert('회원가입이 완료되었습니다! 로그인해주세요.');
+        toast.success('회원가입이 완료되었습니다! 로그인해주세요.');
         navigate('/login');
       } else {
-        // AuthContext에 register가 없을 경우 임시 처리
-        alert('데모 모드: 회원가입 성공 (API 미연동)');
+        toast.info('데모 모드: 회원가입 성공 (API 미연동)');
         navigate('/login');
       }
     } catch (err) {

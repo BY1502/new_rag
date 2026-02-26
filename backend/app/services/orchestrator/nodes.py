@@ -50,6 +50,7 @@ async def supervisor_node(state: dict) -> dict:
         state["message"], state["llm"],
         state.get("use_web_search", False),
         state.get("use_deep_think", False),
+        state.get("use_rag", True),
     )
     logger.info(f"[Orchestrator] Supervisor: tools={tools}")
 
@@ -89,6 +90,15 @@ async def supervisor_node(state: dict) -> dict:
         "active_agent": "supervisor",
     })
 
+    # 파이프라인 시각화용 이벤트
+    await _emit(state, {
+        "type": "pipeline_plan",
+        "agents": ["supervisor"] + planned + ["synthesizer"],
+    })
+    await _emit(state, {
+        "type": "agent_status", "agent": "supervisor", "status": "done", "duration_ms": 0,
+    })
+
     return {"planned_agents": planned, "short_circuit": None, "current_step": 0}
 
 
@@ -104,12 +114,14 @@ async def rag_agent_node(state: dict) -> dict:
         "thinking": "📚 RAG Agent: 지식 베이스에서 문서를 검색합니다...",
         "active_agent": "rag",
     })
+    await _emit(state, {"type": "agent_status", "agent": "rag", "status": "active"})
 
     t0 = time.time()
     rag_service = get_rag_service()
 
+    sources = []
     try:
-        context = await rag_service._retrieve_context(
+        context, sources = await rag_service._retrieve_context(
             state["message"],
             state["kb_ids"],
             state["user_id"],
@@ -126,7 +138,7 @@ async def rag_agent_node(state: dict) -> dict:
 
     duration = int((time.time() - t0) * 1000)
 
-    result = {"agent": "rag", "context": context or "", "duration_ms": duration}
+    result = {"agent": "rag", "context": context or "", "sources": sources, "duration_ms": duration}
     tool_call = {
         "name": "vector_retrieval",
         "input": {"query": state["message"], "kb_ids": state["kb_ids"]},
@@ -139,6 +151,7 @@ async def rag_agent_node(state: dict) -> dict:
         "thinking": f"📚 RAG Agent: 검색 완료 ({duration}ms)",
         "active_agent": "rag",
     })
+    await _emit(state, {"type": "agent_status", "agent": "rag", "status": "done", "duration_ms": duration})
 
     return {
         "agent_results": state.get("agent_results", []) + [result],
@@ -165,6 +178,7 @@ async def web_search_agent_node(state: dict) -> dict:
         "thinking": f"🌐 Web Agent: {provider_labels.get(provider, provider)} 검색 중...",
         "active_agent": "web_search",
     })
+    await _emit(state, {"type": "agent_status", "agent": "web_search", "status": "active"})
 
     t0 = time.time()
     rag_service = get_rag_service()
@@ -198,6 +212,7 @@ async def web_search_agent_node(state: dict) -> dict:
         "thinking": f"🌐 Web Agent: {status_msg}",
         "active_agent": "web_search",
     })
+    await _emit(state, {"type": "agent_status", "agent": "web_search", "status": "done", "duration_ms": duration})
 
     return {
         "agent_results": state.get("agent_results", []) + [result],
@@ -218,6 +233,7 @@ async def mcp_agent_node(state: dict) -> dict:
         "thinking": "🔌 MCP Agent: 외부 도구를 실행합니다...",
         "active_agent": "mcp",
     })
+    await _emit(state, {"type": "agent_status", "agent": "mcp", "status": "active"})
 
     t0 = time.time()
     rag_service = get_rag_service()
@@ -249,6 +265,7 @@ async def mcp_agent_node(state: dict) -> dict:
         "thinking": f"🔌 MCP Agent: 도구 실행 완료 ({duration}ms)",
         "active_agent": "mcp",
     })
+    await _emit(state, {"type": "agent_status", "agent": "mcp", "status": "done", "duration_ms": duration})
 
     return {
         "agent_results": state.get("agent_results", []) + [result],
@@ -364,8 +381,9 @@ async def synthesizer_node(state: dict) -> dict:
     """에이전트 결과를 통합하여 최종 답변을 생성"""
     from app.services.rag_service import get_rag_service
 
-    # 1. 컨텍스트 통합
+    # 1. 컨텍스트 통합 + 소스 수집
     context_parts = []
+    all_sources = []
     label_map = {
         "rag": "Knowledge Base",
         "web_search": "Web Search Result",
@@ -376,14 +394,23 @@ async def synthesizer_node(state: dict) -> dict:
         if r.get("context"):
             label = label_map.get(r["agent"], r["agent"])
             context_parts.append(f"[{label}]\n{r['context']}")
+        if r.get("sources"):
+            all_sources.extend(r["sources"])
 
     context_text = "\n\n---\n\n".join(context_parts) if context_parts else ""
+
+    # 소스 메타데이터 SSE 전송
+    if all_sources:
+        await _emit(state, {"type": "sources", "sources": all_sources})
+        # 인용 지시를 컨텍스트에 추가
+        context_text += "\n\n[인용 지시] 답변에서 출처를 인용할 때 [1], [2] 형식으로 번호를 사용하세요. 각 번호는 위의 [Source N]에 해당합니다."
 
     await _emit(state, {
         "type": "thinking",
         "thinking": "💬 Synthesizer: 수집된 정보를 종합하여 답변을 생성합니다...",
         "active_agent": "synthesizer",
     })
+    await _emit(state, {"type": "agent_status", "agent": "synthesizer", "status": "active"})
 
     # 2. tool_calls_meta 전송
     if state.get("tool_calls_log"):
@@ -428,6 +455,7 @@ async def synthesizer_node(state: dict) -> dict:
         except Exception as e:
             logger.debug(f"Self-reflection skipped: {e}")
 
-    # 5. 종료 시그널
+    # 5. Synthesizer 완료 + 종료 시그널
+    await _emit(state, {"type": "agent_status", "agent": "synthesizer", "status": "done", "duration_ms": 0})
     await _emit_sentinel(state)
     return state

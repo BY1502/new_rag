@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authAPI } from '../api';
+import { useToast } from '../contexts/ToastContext';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,7 +17,7 @@ export default function Login() {
       const data = await authAPI.login(email, password);
       localStorage.setItem('rag_token', data.access_token);
       navigate('/home');
-    } catch (err) { alert("로그인 실패: 이메일과 비밀번호를 확인하세요."); }
+    } catch (err) { toast.error("로그인 실패: 이메일과 비밀번호를 확인하세요."); }
     finally { setLoading(false); }
   };
 

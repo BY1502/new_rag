@@ -35,7 +35,9 @@
       "WebFetch(domain:docling-project.github.io)",
       "Bash(ls:*)",
       "WebFetch(domain:docs.vllm.ai)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(node -c /home/ojt/new_rag/new_rag/frontend/src/App.jsx)",
+      "Bash(node -c /home/ojt/new_rag/new_rag/frontend/src/layouts/MainLayout.jsx)"
     ]
   }
 }
