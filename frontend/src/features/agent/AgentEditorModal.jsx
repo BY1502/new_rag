@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { X, Bot, Save, Info, Cpu, FileText, Loader2, Globe, Plug, Brain, HardDrive, Sliders } from '../../components/ui/Icon';
+import { X, Bot, Save, Info, Cpu, FileText, Loader2, Globe, Plug, HardDrive, Sliders } from '../../components/ui/Icon';
 import { settingsAPI } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 
 export default function AgentEditorModal({ isOpen, onClose, onSave, initialData = null }) {
   const { toast } = useToast();
-  const DEFAULT_TOOLS = { smartMode: false, sources: { rag: true, web_search: false, mcp: false, sql: false } };
+  const DEFAULT_TOOLS = { sources: { rag: true, web_search: false, mcp: false, sql: false } };
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     model: 'llama3.1',
     systemPrompt: '',
     published: true,
-    defaultTools: { smartMode: false, sources: { rag: true, web_search: false, mcp: false, sql: false } },
+    defaultTools: { sources: { rag: true, web_search: false, mcp: false, sql: false } },
   });
 
   const [availableModels, setAvailableModels] = useState([]);
@@ -45,11 +45,14 @@ export default function AgentEditorModal({ isOpen, onClose, onSave, initialData 
     if (!isOpen) return;
 
     if (initialData) {
-      // 구형식 마이그레이션
+      // 구형식 마이그레이션 (smartMode 제거)
       let tools = initialData.defaultTools || { ...DEFAULT_TOOLS };
-      if (!('smartMode' in tools) || !('sources' in tools)) {
-        const { deep_think, ...sources } = tools;
-        tools = { smartMode: !!deep_think, sources };
+      if (!('sources' in tools)) {
+        const { deep_think, smartMode, ...sources } = tools;
+        tools = { sources };
+      } else if ('smartMode' in tools) {
+        const { smartMode, ...rest } = tools;
+        tools = rest;
       }
       setFormData({
         name: initialData.name,
@@ -60,7 +63,7 @@ export default function AgentEditorModal({ isOpen, onClose, onSave, initialData 
         defaultTools: tools,
       });
     } else {
-      setFormData({ name: '', description: '', model: 'llama3.1', systemPrompt: '', published: true, defaultTools: { smartMode: false, sources: { rag: true, web_search: false, mcp: false, sql: false } } });
+      setFormData({ name: '', description: '', model: 'llama3.1', systemPrompt: '', published: true, defaultTools: { sources: { rag: true, web_search: false, mcp: false, sql: false } } });
     }
   }, [initialData, isOpen]);
 
@@ -169,31 +172,6 @@ export default function AgentEditorModal({ isOpen, onClose, onSave, initialData 
               <label className="block text-xs font-bold text-gray-700 mb-1.5">시스템 프롬프트</label>
               <textarea value={formData.systemPrompt} onChange={(e) => setFormData({...formData, systemPrompt: e.target.value})} placeholder="에이전트에게 부여할 페르소나나 지시사항을 입력하세요. (예: 당신은 친절한 여행 가이드입니다.)" className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-green-400 outline-none text-sm resize-none h-32" />
             </div>
-          </section>
-
-          <section className="space-y-4">
-            <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><Sliders size={16} className="text-gray-500"/> 라우팅 모드</h4>
-            <label
-              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition hover:shadow-sm ${
-                formData.defaultTools?.smartMode ? 'bg-purple-50 border-purple-200' : 'border-gray-200'
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={formData.defaultTools?.smartMode ?? false}
-                onChange={() => setFormData({
-                  ...formData,
-                  defaultTools: { ...formData.defaultTools, smartMode: !formData.defaultTools?.smartMode }
-                })}
-                className="mt-0.5 accent-purple-500"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-800">
-                  <Brain size={13} /> Smart Mode
-                </div>
-                <div className="text-[10px] text-gray-500 mt-0.5">AI가 활성 소스 중 최적 조합을 자동 선택합니다</div>
-              </div>
-            </label>
           </section>
 
           <section className="space-y-4">

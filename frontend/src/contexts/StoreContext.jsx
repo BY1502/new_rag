@@ -128,9 +128,8 @@ export function StoreProvider({ children }) {
   });
   const [currentKbId, setCurrentKbId] = useState('default');
 
-  // 도구 기본 프리셋 (Mode + Sources 분리)
+  // 도구 기본 프리셋 (sources만)
   const DEFAULT_TOOL_PRESET = {
-    smartMode: false,
     sources: { rag: true, web_search: false, mcp: false, sql: false },
   };
 
@@ -138,10 +137,13 @@ export function StoreProvider({ children }) {
   const migrateDefaultTools = (raw) => {
     if (!raw) return DEFAULT_TOOL_PRESET;
     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    if ('smartMode' in parsed && 'sources' in parsed) return parsed;
-    // 구형식: { rag, web_search, mcp, sql, deep_think } → 신형식
-    const { deep_think, ...sources } = parsed;
-    return { smartMode: !!deep_think, sources };
+    // 이미 신형식 (sources만)
+    if ('sources' in parsed && !('smartMode' in parsed)) return parsed;
+    // smartMode가 있는 이전 형식 → sources만 추출
+    if ('sources' in parsed) return { sources: parsed.sources };
+    // 가장 구형식: { rag, web_search, mcp, sql, deep_think }
+    const { deep_think, smartMode, ...sources } = parsed;
+    return { sources };
   };
 
   // 시스템 전문 에이전트 정의
@@ -155,7 +157,7 @@ export function StoreProvider({ children }) {
       systemPrompt: '당신은 "RAG AI 비서"입니다. 사용자의 다양한 질문과 요청에 전문적이고 친절하게 응답하는 범용 AI 어시스턴트입니다.\n\n## 핵심 역할\n- 사용자의 질문에 정확하고 상세하게 답변합니다.\n- 복잡한 주제도 이해하기 쉽게 설명합니다.\n- 글쓰기, 번역, 요약, 코딩, 분석 등 다양한 작업을 수행합니다.\n\n## 응답 원칙\n1. **정확성 우선**: 확실하지 않은 정보는 솔직하게 말합니다.\n2. **구조화된 답변**: 제목, 소제목, 번호 리스트, 표 등을 활용합니다.\n3. **한국어 우선**: 기술 용어는 영어 원문을 병기합니다.\n4. **맥락 유지**: 이전 대화 내용을 기억합니다.\n5. **적극적 제안**: 추가 도움이 될 정보를 제안합니다.',
       icon: 'sparkles',
       published: true,
-      defaultTools: { smartMode: false, sources: { rag: false, web_search: false, mcp: false, sql: false } },
+      defaultTools: { sources: { rag: false, web_search: false, mcp: false, sql: false } },
       updated_at: new Date().toLocaleDateString()
     },
     {
@@ -167,7 +169,7 @@ export function StoreProvider({ children }) {
       systemPrompt: '당신은 "RAG AI 문서 분석 전문가"입니다. 사용자가 업로드한 문서를 기반으로 정확한 답변을 제공하는 RAG 전문 에이전트입니다.\n\n## 핵심 역할\n- 지식 베이스에 저장된 문서를 검색하고 분석합니다.\n- 문서 내용을 요약, 비교, 분석합니다.\n- 문서에 없는 내용은 솔직하게 답합니다.\n\n## 응답 원칙\n1. **근거 기반 답변**: 출처 문서명이나 관련 섹션을 언급합니다.\n2. **정확한 인용**: 원문을 직접 인용하거나 요약합니다.\n3. **포괄적 검색**: 관련된 여러 문서를 종합합니다.\n4. **문서 범위 명시**: 답변 가능한 범위를 명확히 구분합니다.',
       icon: 'file-text',
       published: true,
-      defaultTools: { smartMode: true, sources: { rag: true, web_search: false, mcp: false, sql: false } },
+      defaultTools: { sources: { rag: true, web_search: false, mcp: false, sql: false } },
       updated_at: new Date().toLocaleDateString()
     },
     {
@@ -179,7 +181,7 @@ export function StoreProvider({ children }) {
       systemPrompt: '사용자의 질의 의도를 분석하여 적절한 전문 에이전트(RAG, 웹검색, SQL, MCP, 물류)에게 작업을 위임하는 감독 에이전트입니다.',
       icon: 'brain',
       published: true,
-      defaultTools: { smartMode: true, sources: { rag: true, web_search: true, mcp: false, sql: false } },
+      defaultTools: { sources: { rag: true, web_search: true, mcp: false, sql: false } },
       updated_at: new Date().toLocaleDateString()
     },
     {
@@ -190,7 +192,7 @@ export function StoreProvider({ children }) {
       model: 'gemma3:12b',
       icon: 'file-text',
       published: true,
-      defaultTools: { smartMode: false, sources: { rag: true, web_search: false, mcp: false, sql: false } },
+      defaultTools: { sources: { rag: true, web_search: false, mcp: false, sql: false } },
       updated_at: new Date().toLocaleDateString()
     },
     {
@@ -201,7 +203,7 @@ export function StoreProvider({ children }) {
       model: 'gemma3:12b',
       icon: 'globe',
       published: true,
-      defaultTools: { smartMode: false, sources: { rag: false, web_search: true, mcp: false, sql: false } },
+      defaultTools: { sources: { rag: false, web_search: true, mcp: false, sql: false } },
       updated_at: new Date().toLocaleDateString()
     },
     {
@@ -212,7 +214,7 @@ export function StoreProvider({ children }) {
       model: 'gemma3:12b',
       icon: 'database',
       published: true,
-      defaultTools: { smartMode: false, sources: { rag: false, web_search: false, mcp: false, sql: true } },
+      defaultTools: { sources: { rag: false, web_search: false, mcp: false, sql: true } },
       updated_at: new Date().toLocaleDateString()
     },
     {
@@ -223,7 +225,7 @@ export function StoreProvider({ children }) {
       model: 'gemma3:12b',
       icon: 'plug',
       published: true,
-      defaultTools: { smartMode: false, sources: { rag: false, web_search: false, mcp: true, sql: false } },
+      defaultTools: { sources: { rag: false, web_search: false, mcp: true, sql: false } },
       updated_at: new Date().toLocaleDateString()
     },
     {
@@ -234,7 +236,7 @@ export function StoreProvider({ children }) {
       model: 'gemma3:12b',
       icon: 'truck',
       published: true,
-      defaultTools: { smartMode: false, sources: { rag: false, web_search: false, mcp: false, sql: false } },
+      defaultTools: { sources: { rag: false, web_search: false, mcp: false, sql: false } },
       updated_at: new Date().toLocaleDateString()
     },
   ];

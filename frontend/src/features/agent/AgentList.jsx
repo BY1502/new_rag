@@ -197,11 +197,8 @@ export default function AgentList() {
         </div>
 
         {/* 도구 뱃지 */}
-        {agent.defaultTools && (agent.defaultTools.smartMode || (agent.defaultTools.sources && Object.values(agent.defaultTools.sources).some(v => v))) && (
+        {agent.defaultTools?.sources && Object.values(agent.defaultTools.sources).some(v => v) && (
           <div className="flex flex-wrap items-center gap-1 mb-3">
-            {agent.defaultTools.smartMode && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-50 text-purple-600 border border-purple-200"><Brain size={9} /> Smart</span>
-            )}
             {agent.defaultTools.sources?.rag && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-200"><FileText size={9} /> RAG</span>
             )}

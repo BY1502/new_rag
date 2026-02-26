@@ -15,7 +15,6 @@ import {
   X,
   Loader2,
   CheckCircle,
-  Database,
   StopCircle,
   FileText,
   Copy,
@@ -26,7 +25,7 @@ import {
 import AgentPipeline from "./AgentPipeline";
 import FollowUpSuggestions from "./FollowUpSuggestions";
 import CitationPopover, { CitationBadge } from "./CitationPopover";
-import AgentContextCard from "./AgentContextCard";
+import ContextChips from "./ContextChips";
 
 // 코드 블록 복사 버튼 컴포넌트
 function CodeBlockPre({ children, ...props }) {
@@ -113,22 +112,15 @@ export default function ChatInterface() {
     };
   }, [files]);
 
-  // UI 상태
-  const [isKbMenuOpen, setIsKbMenuOpen] = useState(false);
-
-  // Mode + Sources 분리 상태
-  const [modeOverride, setModeOverride] = useState(null);       // null = 에이전트 기본값 사용
+  // 소스 오버라이드 상태
   const [sourceOverrides, setSourceOverrides] = useState({});    // 소스별 오버라이드
   const [activeMcpIds, setActiveMcpIds] = useState([]);
   const [selectedKbIds, setSelectedKbIds] = useState([currentKbId]);
   const [selectedDbConnectionId, setSelectedDbConnectionId] = useState(null);
   const [dbConnections, setDbConnections] = useState([]);
 
-  // 에이전트 기본값 (Mode + Sources 형식)
-  const agentDefaults = currentAgent?.defaultTools || DEFAULT_TOOL_PRESET || { smartMode: false, sources: { rag: true, web_search: false, mcp: false, sql: false } };
-
-  // 최종 Smart Mode
-  const smartMode = modeOverride ?? agentDefaults.smartMode ?? false;
+  // 에이전트 기본값 (sources 형식)
+  const agentDefaults = currentAgent?.defaultTools || DEFAULT_TOOL_PRESET || { sources: { rag: true, web_search: false, mcp: false, sql: false } };
 
   // 최종 소스 상태
   const effectiveSources = useMemo(() => ({
@@ -138,17 +130,19 @@ export default function ChatInterface() {
     sql: sourceOverrides.sql ?? agentDefaults.sources?.sql ?? false,
   }), [sourceOverrides, agentDefaults]);
 
+  // Smart Mode 자동 계산: 활성 소스 2개 이상이면 AI 자동 선택
+  const activeSourceCount = useMemo(() =>
+    Object.values(effectiveSources).filter(Boolean).length,
+    [effectiveSources]
+  );
+  const smartMode = activeSourceCount >= 2;
+
   // 글로벌 단축키에서 config 변경 시 동기화
   useEffect(() => {
     if (config.useWebSearch !== undefined) {
       setSourceOverrides(prev => ({ ...prev, web_search: !!config.useWebSearch }));
     }
   }, [config.useWebSearch]);
-  useEffect(() => {
-    if (config.useDeepThink !== undefined) {
-      setModeOverride(!!config.useDeepThink);
-    }
-  }, [config.useDeepThink]);
   useEffect(() => {
     if (config.useSql !== undefined) {
       setSourceOverrides(prev => ({ ...prev, sql: !!config.useSql }));
@@ -176,13 +170,6 @@ export default function ChatInterface() {
     });
   };
 
-  const selectedKbLabel =
-    selectedKbIds.length === 0
-      ? 'KB 없음'
-      : selectedKbIds.length === 1
-        ? knowledgeBases.find((kb) => kb.id === selectedKbIds[0])?.name || "KB"
-        : `${selectedKbIds.length}개 KB`;
-
   // DB 연결 목록 로드
   useEffect(() => {
     const loadDbConns = async () => {
@@ -208,15 +195,6 @@ export default function ChatInterface() {
       return prev;
     });
   }, [currentKbId, knowledgeBases]);
-
-  useEffect(() => {
-    const handleClickOutside = () => {
-      setIsKbMenuOpen(false);
-    };
-    if (isKbMenuOpen)
-      window.addEventListener("click", handleClickOutside);
-    return () => window.removeEventListener("click", handleClickOutside);
-  }, [isKbMenuOpen]);
 
   // 세션 전환 시 스트리밍 중단 및 상태 초기화
   useEffect(() => {
@@ -291,7 +269,6 @@ export default function ChatInterface() {
   // 에이전트 변경 시 오버라이드 초기화
   const handleAgentChange = useCallback((agentId) => {
     setCurrentAgentId(agentId);
-    setModeOverride(null);
     setSourceOverrides({});
     setActiveMcpIds([]);
     setSelectedDbConnectionId(null);
@@ -308,16 +285,6 @@ export default function ChatInterface() {
         return rest;
       }
       return { ...prev, [sourceKey]: newVal };
-    });
-  }, [agentDefaults]);
-
-  // Smart Mode 토글 핸들러
-  const handleToggleSmartMode = useCallback(() => {
-    setModeOverride(prev => {
-      const defaultVal = agentDefaults.smartMode ?? false;
-      const current = prev ?? defaultVal;
-      const newVal = !current;
-      return newVal === defaultVal ? null : newVal;
     });
   }, [agentDefaults]);
 
@@ -868,20 +835,20 @@ export default function ChatInterface() {
           )}
 
           <div className="bg-white border border-gray-300 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-green-400 focus-within:border-green-400 transition-all flex flex-col relative">
-            {/* 상단: Agent Context Card + KB + 파일 태그 */}
+            {/* 상단: Context Chips + 파일 태그 */}
             <div className="px-3 pt-2.5 flex flex-wrap items-center gap-1.5">
-              <AgentContextCard
+              <ContextChips
                 agents={agents}
                 currentAgent={currentAgent}
                 config={config}
+                onAgentChange={handleAgentChange}
                 effectiveSources={effectiveSources}
                 agentDefaults={agentDefaults}
                 sourceOverrides={sourceOverrides}
-                smartMode={smartMode}
-                isModeOverride={modeOverride !== null}
                 onToggleSource={handleToggleSource}
-                onToggleSmartMode={handleToggleSmartMode}
-                onAgentChange={handleAgentChange}
+                knowledgeBases={knowledgeBases}
+                selectedKbIds={selectedKbIds}
+                onToggleKb={toggleKb}
                 mcpServers={mcpServers}
                 activeMcpIds={activeMcpIds}
                 onToggleMcp={toggleMcpServer}
@@ -889,74 +856,6 @@ export default function ChatInterface() {
                 selectedDbConnectionId={selectedDbConnectionId}
                 onSelectDb={setSelectedDbConnectionId}
               />
-
-              <div className="w-px h-5 bg-gray-200" />
-
-              {/* 지식 베이스 선택 */}
-              <div className="relative">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsKbMenuOpen(!isKbMenuOpen);
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
-                    selectedKbIds.length > 0
-                      ? 'bg-green-50 hover:bg-green-100 text-green-600 border border-green-100'
-                      : 'bg-gray-50 hover:bg-gray-100 text-gray-400 border border-gray-200'
-                  }`}
-                >
-                  <Database size={12} />
-                  <span className="max-w-[120px] truncate">
-                    {selectedKbLabel}
-                  </span>
-                  <ChevronDown
-                    size={10}
-                    className={`transition-transform ${isKbMenuOpen ? "rotate-180" : ""}`}
-                  />
-                </button>
-                {isKbMenuOpen && (
-                  <div className="absolute bottom-full left-0 mb-2 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-30 overflow-hidden">
-                    <div className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
-                      지식 베이스 (다중 선택)
-                    </div>
-                    <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
-                      {knowledgeBases.map((kb) => {
-                        const isSelected = selectedKbIds.includes(kb.id);
-                        return (
-                          <button
-                            key={kb.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleKb(kb.id);
-                            }}
-                            className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
-                          >
-                            <div
-                              className={`w-4 h-4 border-2 rounded flex items-center justify-center transition ${
-                                isSelected
-                                  ? "bg-green-400 border-green-400"
-                                  : "border-gray-300 dark:border-gray-600"
-                              }`}
-                            >
-                              {isSelected && (
-                                <CheckCircle size={10} className="text-white" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs font-bold text-gray-800 dark:text-gray-200 truncate">
-                                {kb.name}
-                              </div>
-                              <div className="text-[10px] text-gray-400 truncate">
-                                {kb.files?.length || 0}개 문서
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
 
               {/* 파일 태그 */}
               {files.map((file, idx) => {
