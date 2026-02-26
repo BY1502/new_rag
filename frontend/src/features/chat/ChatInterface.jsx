@@ -112,23 +112,21 @@ export default function ChatInterface() {
     };
   }, [files]);
 
-  // 소스 오버라이드 상태
-  const [sourceOverrides, setSourceOverrides] = useState({});    // 소스별 오버라이드
   const [activeMcpIds, setActiveMcpIds] = useState([]);
   const [selectedKbIds, setSelectedKbIds] = useState([currentKbId]);
   const [selectedDbConnectionId, setSelectedDbConnectionId] = useState(null);
   const [dbConnections, setDbConnections] = useState([]);
 
-  // 에이전트 기본값 (sources 형식)
+  // 에이전트 기본값 (sources 형식) — 에이전트 선택이 곧 소스 선택
   const agentDefaults = currentAgent?.defaultTools || DEFAULT_TOOL_PRESET || { sources: { rag: true, web_search: false, mcp: false, sql: false } };
 
-  // 최종 소스 상태
+  // 최종 소스 상태 (에이전트에서 직접 결정, 오버라이드 없음)
   const effectiveSources = useMemo(() => ({
-    rag: sourceOverrides.rag ?? agentDefaults.sources?.rag ?? true,
-    web_search: sourceOverrides.web_search ?? agentDefaults.sources?.web_search ?? false,
-    mcp: sourceOverrides.mcp ?? agentDefaults.sources?.mcp ?? false,
-    sql: sourceOverrides.sql ?? agentDefaults.sources?.sql ?? false,
-  }), [sourceOverrides, agentDefaults]);
+    rag: agentDefaults.sources?.rag ?? true,
+    web_search: agentDefaults.sources?.web_search ?? false,
+    mcp: agentDefaults.sources?.mcp ?? false,
+    sql: agentDefaults.sources?.sql ?? false,
+  }), [agentDefaults]);
 
   // Smart Mode 자동 계산: 활성 소스 2개 이상이면 AI 자동 선택
   const activeSourceCount = useMemo(() =>
@@ -136,18 +134,6 @@ export default function ChatInterface() {
     [effectiveSources]
   );
   const smartMode = activeSourceCount >= 2;
-
-  // 글로벌 단축키에서 config 변경 시 동기화
-  useEffect(() => {
-    if (config.useWebSearch !== undefined) {
-      setSourceOverrides(prev => ({ ...prev, web_search: !!config.useWebSearch }));
-    }
-  }, [config.useWebSearch]);
-  useEffect(() => {
-    if (config.useSql !== undefined) {
-      setSourceOverrides(prev => ({ ...prev, sql: !!config.useSql }));
-    }
-  }, [config.useSql]);
 
   // 복사 알림
   const [copiedId, setCopiedId] = useState(null);
@@ -266,27 +252,12 @@ export default function ChatInterface() {
     );
   };
 
-  // 에이전트 변경 시 오버라이드 초기화
+  // 에이전트 변경 시 하위 선택 초기화
   const handleAgentChange = useCallback((agentId) => {
     setCurrentAgentId(agentId);
-    setSourceOverrides({});
     setActiveMcpIds([]);
     setSelectedDbConnectionId(null);
   }, [setCurrentAgentId]);
-
-  // 소스 토글 핸들러
-  const handleToggleSource = useCallback((sourceKey) => {
-    setSourceOverrides(prev => {
-      const defaultVal = agentDefaults.sources?.[sourceKey] ?? false;
-      const current = prev[sourceKey] ?? defaultVal;
-      const newVal = !current;
-      if (newVal === defaultVal) {
-        const { [sourceKey]: _, ...rest } = prev;
-        return rest;
-      }
-      return { ...prev, [sourceKey]: newVal };
-    });
-  }, [agentDefaults]);
 
   const handleSend = async (retryQuery = null) => {
     const query = retryQuery || input;
@@ -843,9 +814,6 @@ export default function ChatInterface() {
                 config={config}
                 onAgentChange={handleAgentChange}
                 effectiveSources={effectiveSources}
-                agentDefaults={agentDefaults}
-                sourceOverrides={sourceOverrides}
-                onToggleSource={handleToggleSource}
                 knowledgeBases={knowledgeBases}
                 selectedKbIds={selectedKbIds}
                 onToggleKb={toggleKb}
