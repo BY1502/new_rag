@@ -488,9 +488,12 @@ async def list_mcp_servers(
     rows = result.scalars().all()
     return {"servers": [
         {
-            "id": s.server_id, "name": s.name, "type": s.server_type,
+            # canonical
+            "server_id": s.server_id, "name": s.name, "server_type": s.server_type,
             "url": s.url, "command": s.command, "headers_json": s.headers_json,
             "priority": s.priority, "enabled": s.enabled, "sort_order": s.sort_order,
+            # backward-compat
+            "id": s.server_id, "type": s.server_type,
         }
         for s in rows
     ]}
@@ -503,17 +506,18 @@ async def create_mcp_server(
     db: AsyncSession = Depends(get_db),
 ):
     """MCP 서버를 등록합니다."""
-    server_id = data.get("id") or str(uuid.uuid4())[:8]
+    server_id = data.get("server_id") or data.get("id") or str(uuid.uuid4())[:8]
+    server_type = data.get("server_type") or data.get("type") or "sse"
     srv = McpServer(
         user_id=current_user.id, server_id=server_id,
-        name=data.get("name", ""), server_type=data.get("type", "sse"),
+        name=data.get("name", ""), server_type=server_type,
         url=data.get("url", ""), command=data.get("command", ""),
         headers_json=data.get("headers_json"), priority=data.get("priority", 0),
         enabled=data.get("enabled", True), sort_order=data.get("sort_order", 0),
     )
     db.add(srv)
     await db.commit()
-    return {"message": f"MCP 서버 '{srv.name}'가 등록되었습니다.", "id": server_id}
+    return {"message": f"MCP 서버 '{srv.name}'가 등록되었습니다.", "server_id": server_id, "id": server_id}
 
 
 @router.delete("/mcp-servers/{server_id}")
@@ -542,7 +546,20 @@ async def reorder_mcp_servers(
     db: AsyncSession = Depends(get_db),
 ):
     """MCP 서버 정렬 순서를 일괄 변경합니다."""
-    order = data.get("order", [])  # [{"id": "xxx", "sort_order": 0}, ...]
+    # 지원 포맷:
+    # 1) {"order":[{"id":"xxx","sort_order":0}, ...]}
+    # 2) {"order":["id1","id2", ...]}
+    # 3) {"server_ids":["id1","id2", ...]}
+    order = []
+    if isinstance(data.get("order"), list):
+        raw_order = data.get("order", [])
+        if raw_order and isinstance(raw_order[0], str):
+            order = [{"id": sid, "sort_order": idx} for idx, sid in enumerate(raw_order)]
+        else:
+            order = raw_order
+    elif isinstance(data.get("server_ids"), list):
+        order = [{"id": sid, "sort_order": idx} for idx, sid in enumerate(data.get("server_ids", []))]
+
     stmt = select(McpServer).where(McpServer.user_id == current_user.id)
     result = await db.execute(stmt)
     servers = {s.server_id: s for s in result.scalars().all()}

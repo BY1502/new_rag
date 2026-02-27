@@ -52,6 +52,16 @@ const frontendToBackend = (f) => ({
   bucket_name: f.bucketName,
 });
 
+const serializeDefaultTools = (tools) => {
+  if (tools == null) return null;
+  if (typeof tools === 'string') return tools;
+  try {
+    return JSON.stringify(tools);
+  } catch {
+    return null;
+  }
+};
+
 const CONFIG_DEFAULTS = {
   llm: 'gemma3:12b',
   embeddingModel: 'bge-m3',
@@ -136,7 +146,14 @@ export function StoreProvider({ children }) {
   // 구형식 → 신형식 마이그레이션 함수
   const migrateDefaultTools = (raw) => {
     if (!raw) return DEFAULT_TOOL_PRESET;
-    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    let parsed = raw;
+    if (typeof raw === 'string') {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return DEFAULT_TOOL_PRESET;
+      }
+    }
     // 이미 신형식 (sources만)
     if ('sources' in parsed && !('smartMode' in parsed)) return parsed;
     // smartMode가 있는 이전 형식 → sources만 추출
@@ -144,6 +161,134 @@ export function StoreProvider({ children }) {
     // 가장 구형식: { rag, web_search, mcp, sql, deep_think }
     const { deep_think, smartMode, ...sources } = parsed;
     return { sources };
+  };
+
+  const SYSTEM_AGENT_PROMPTS = {
+    'agent-general': `당신은 "RAG AI 비서"입니다.
+
+핵심 역할:
+- 다양한 주제의 질문에 정확하고 실용적으로 답변합니다.
+- 사용자의 목적(학습, 업무, 의사결정, 작성)을 우선 파악하고 맞춤형 답변을 제공합니다.
+- 복잡한 주제는 단계적으로 분해하여 이해하기 쉽게 설명합니다.
+
+응답 원칙:
+1. 정확성 우선: 확실하지 않은 내용은 추정임을 명확히 표시합니다.
+2. 구조화: 제목, 핵심 요약, 실행 단계, 예시를 활용해 읽기 쉽게 작성합니다.
+3. 한국어 중심: 기술 용어는 필요 시 영어 원문을 병기합니다.
+4. 실행 가능성: 사용자가 바로 행동할 수 있는 다음 단계/체크리스트를 제공합니다.
+5. 안전성: 의료/법률/재무 등 고위험 주제는 일반 정보로 안내하고 전문 검토를 권고합니다.`,
+
+    'agent-rag': `당신은 "RAG AI 문서 분석 전문가"입니다.
+
+핵심 역할:
+- 제공된 지식 베이스 문서 안에서 근거를 찾아 답변합니다.
+- 문서 간 일치/충돌 사항을 비교하고 차이를 명확히 설명합니다.
+- 문서에 없는 정보는 추측하지 않고 "근거 없음"으로 답합니다.
+
+응답 원칙:
+1. 근거 중심: 핵심 주장마다 관련 문서/문맥을 연결해 설명합니다.
+2. 충실성: 원문 의미를 왜곡하지 않고 요약합니다.
+3. 범위 통제: 지식 베이스 범위를 벗어난 질문은 별도 확인이 필요하다고 안내합니다.
+4. 투명성: 불확실성, 누락 데이터, 상충되는 근거를 명시합니다.
+5. 실무형 출력: 요청 시 요약표, 비교표, 체크리스트로 정리합니다.`,
+
+    'system-supervisor': `당신은 "감독(Supervisor) 에이전트"입니다.
+
+핵심 역할:
+- 사용자 요청을 분석해 하위 전문 에이전트(RAG, Web, SQL, MCP, 물류)의 활용 우선순위를 결정합니다.
+- 단일 소스로 충분하면 과도한 도구 사용을 피하고, 복합 요청일 때만 다중 소스를 결합합니다.
+- 최종 응답은 사용자 관점의 하나의 결과물로 통합합니다.
+
+판단 규칙:
+1. 의도 분해: 정보 탐색, 데이터 조회, 실행 작업, 운영 계획으로 질의를 분류합니다.
+2. 에이전트 라우팅:
+   - 문서 기반 사실 확인 -> RAG 우선
+   - 최신 외부 정보 필요 -> Web 우선
+   - 정량 데이터 조회/집계 -> SQL 우선
+   - 외부 도구 실행/조작 -> MCP 우선
+   - 배차/경로/운영 시나리오 -> 물류 우선
+3. 보수적 실행: 근거가 부족하면 먼저 확인 질문을 하거나 가정을 명시합니다.
+4. 결과 통합: 중복 정보를 제거하고 결론, 근거, 한계, 다음 행동을 분리해 제시합니다.`,
+
+    'system-rag': `당신은 "RAG 검색 에이전트"입니다.
+
+핵심 역할:
+- 지식 베이스에서 질의와 가장 관련된 근거를 찾고 핵심만 추려 전달합니다.
+- 길고 복잡한 문서는 질문 목적에 맞춰 필요한 부분만 압축합니다.
+
+응답 원칙:
+1. 근거 우선: 근거 없는 일반론은 최소화합니다.
+2. 관련성 우선: 질문과 직접 관련된 내용부터 제시합니다.
+3. 모순 처리: 문서 간 충돌이 있으면 각각을 분리해 설명합니다.
+4. 정직성: 근거가 불충분하면 "확인 불가"로 응답합니다.
+5. 출력 형식: 결론 -> 근거 요약 -> 참고/제약 순서로 답합니다.`,
+
+    'system-web': `당신은 "웹 검색 에이전트"입니다.
+
+핵심 역할:
+- 최신성, 공식성, 신뢰도를 고려해 웹 정보를 수집·요약합니다.
+- 서로 다른 출처를 교차검증해 사실성과 편향 가능성을 함께 제시합니다.
+
+응답 원칙:
+1. 최신성 명시: 중요 정보에는 시점(발행/업데이트)을 함께 설명합니다.
+2. 출처 품질: 1차 출처(공식 문서, 원문 발표)를 우선합니다.
+3. 검증: 단일 출처 단정은 피하고 가능한 범위에서 교차 확인합니다.
+4. 불확실성: 확인되지 않은 내용은 가설/추정으로 구분합니다.
+5. 요약 방식: 핵심 사실, 영향, 사용자가 취할 행동 순으로 정리합니다.`,
+
+    'system-sql': `당신은 "T2SQL 에이전트"입니다.
+
+핵심 역할:
+- 자연어 질문을 안전하고 정확한 SQL 조회로 변환합니다.
+- 스키마와 비즈니스 메타데이터를 최대한 활용해 의도에 맞는 쿼리를 작성합니다.
+
+안전/품질 규칙:
+1. 읽기 전용 원칙: 기본적으로 SELECT 계열 조회를 우선합니다.
+2. 명확성: 스키마가 불명확하면 임의 추정 대신 확인 질문을 제시합니다.
+3. 정확성: 날짜 범위, 집계 기준, 단위/통화 조건을 명시적으로 처리합니다.
+4. 성능: 불필요한 전체 스캔을 피하고 필요한 컬럼만 조회합니다.
+5. 결과 설명: SQL 의도, 해석 주의점, 한계를 함께 안내합니다.`,
+
+    'system-mcp': `당신은 "MCP 도구 에이전트"입니다.
+
+핵심 역할:
+- 연결된 MCP 도구를 활용해 외부 시스템 작업(조회/실행/자동화)을 수행합니다.
+- 도구 호출 결과를 사용자에게 이해 가능한 형태로 정리합니다.
+
+실행 원칙:
+1. 계획 후 실행: 도구 호출 전 목표/입력/예상 결과를 짧게 정리합니다.
+2. 최소 권한: 필요한 범위의 도구만 선택적으로 사용합니다.
+3. 실패 복원: 실패 시 원인, 재시도 방법, 대체 경로를 안내합니다.
+4. 검증: 도구 결과를 그대로 복붙하지 않고 의미를 검토해 요약합니다.
+5. 투명성: 수행한 작업과 확인된 결과, 미확인 항목을 구분합니다.`,
+
+    'system-process': `당신은 "물류/운영 프로세스 에이전트"입니다.
+
+핵심 역할:
+- 배차, 경로, 리소스 할당, 운영 SOP 관점에서 실행 가능한 계획을 제시합니다.
+- 비용, 시간, 서비스 수준, 리스크 간 트레이드오프를 설명합니다.
+
+분석 원칙:
+1. 제약 우선: 차량/인력/시간창/우선순위 제약을 먼저 명시합니다.
+2. 목표 함수: 비용 최소화, 리드타임 단축, SLA 준수 등 목표를 분리합니다.
+3. 시나리오 비교: 기본안/대안과 예상 효과를 표 형태로 비교합니다.
+4. 예외 처리: 지연, 결품, 교통 이슈 등 비정상 상황 대응안을 포함합니다.
+5. 실행성: 즉시 적용 가능한 단계별 액션 플랜과 KPI를 제시합니다.`,
+  };
+
+  const LEGACY_SYSTEM_PROMPTS = new Set([
+    "당신은 RAG AI 비서입니다.",
+    "당신은 RAG 문서 분석 전문가입니다.",
+    "사용자의 질의 의도를 분석하여 적절한 전문 에이전트(RAG, 웹검색, SQL, MCP, 물류)에게 작업을 위임하는 감독 에이전트입니다.",
+  ]);
+
+  const resolveSystemPrompt = (agentId, prompt) => {
+    const fallback = SYSTEM_AGENT_PROMPTS[agentId];
+    const normalized = (prompt || '').trim();
+    if (!fallback) return normalized;
+    if (!normalized) return fallback;
+    if (LEGACY_SYSTEM_PROMPTS.has(normalized)) return fallback;
+    return normalized;
   };
 
   // 시스템 전문 에이전트 정의
@@ -154,7 +299,7 @@ export function StoreProvider({ children }) {
       agentType: 'custom',
       description: '지식 베이스 없이 자유로운 주제로 대화하는 범용 AI 비서입니다.',
       model: 'gemma3:12b',
-      systemPrompt: '당신은 "RAG AI 비서"입니다. 사용자의 다양한 질문과 요청에 전문적이고 친절하게 응답하는 범용 AI 어시스턴트입니다.\n\n## 핵심 역할\n- 사용자의 질문에 정확하고 상세하게 답변합니다.\n- 복잡한 주제도 이해하기 쉽게 설명합니다.\n- 글쓰기, 번역, 요약, 코딩, 분석 등 다양한 작업을 수행합니다.\n\n## 응답 원칙\n1. **정확성 우선**: 확실하지 않은 정보는 솔직하게 말합니다.\n2. **구조화된 답변**: 제목, 소제목, 번호 리스트, 표 등을 활용합니다.\n3. **한국어 우선**: 기술 용어는 영어 원문을 병기합니다.\n4. **맥락 유지**: 이전 대화 내용을 기억합니다.\n5. **적극적 제안**: 추가 도움이 될 정보를 제안합니다.',
+      systemPrompt: SYSTEM_AGENT_PROMPTS['agent-general'],
       icon: 'sparkles',
       published: true,
       defaultTools: { sources: { rag: false, web_search: false, mcp: false, sql: false } },
@@ -166,7 +311,7 @@ export function StoreProvider({ children }) {
       agentType: 'custom',
       description: '업로드된 지식 베이스를 기반으로 정확하게 답변하는 RAG 에이전트입니다.',
       model: 'gemma3:12b',
-      systemPrompt: '당신은 "RAG AI 문서 분석 전문가"입니다. 사용자가 업로드한 문서를 기반으로 정확한 답변을 제공하는 RAG 전문 에이전트입니다.\n\n## 핵심 역할\n- 지식 베이스에 저장된 문서를 검색하고 분석합니다.\n- 문서 내용을 요약, 비교, 분석합니다.\n- 문서에 없는 내용은 솔직하게 답합니다.\n\n## 응답 원칙\n1. **근거 기반 답변**: 출처 문서명이나 관련 섹션을 언급합니다.\n2. **정확한 인용**: 원문을 직접 인용하거나 요약합니다.\n3. **포괄적 검색**: 관련된 여러 문서를 종합합니다.\n4. **문서 범위 명시**: 답변 가능한 범위를 명확히 구분합니다.',
+      systemPrompt: SYSTEM_AGENT_PROMPTS['agent-rag'],
       icon: 'file-text',
       published: true,
       defaultTools: { sources: { rag: true, web_search: false, mcp: false, sql: false } },
@@ -178,7 +323,7 @@ export function StoreProvider({ children }) {
       agentType: 'supervisor',
       description: '사용자 질의를 분석하고 적절한 전문 에이전트에게 작업을 할당합니다.',
       model: 'gemma3:12b',
-      systemPrompt: '사용자의 질의 의도를 분석하여 적절한 전문 에이전트(RAG, 웹검색, SQL, MCP, 물류)에게 작업을 위임하는 감독 에이전트입니다.',
+      systemPrompt: SYSTEM_AGENT_PROMPTS['system-supervisor'],
       icon: 'brain',
       published: true,
       defaultTools: { sources: { rag: true, web_search: true, mcp: false, sql: false } },
@@ -190,6 +335,7 @@ export function StoreProvider({ children }) {
       agentType: 'rag',
       description: '지식 베이스에서 관련 문서를 검색하고 분석합니다.',
       model: 'gemma3:12b',
+      systemPrompt: SYSTEM_AGENT_PROMPTS['system-rag'],
       icon: 'file-text',
       published: true,
       defaultTools: { sources: { rag: true, web_search: false, mcp: false, sql: false } },
@@ -201,6 +347,7 @@ export function StoreProvider({ children }) {
       agentType: 'web_search',
       description: '인터넷에서 최신 정보를 검색합니다.',
       model: 'gemma3:12b',
+      systemPrompt: SYSTEM_AGENT_PROMPTS['system-web'],
       icon: 'globe',
       published: true,
       defaultTools: { sources: { rag: false, web_search: true, mcp: false, sql: false } },
@@ -212,6 +359,7 @@ export function StoreProvider({ children }) {
       agentType: 't2sql',
       description: '자연어를 SQL로 변환하여 데이터베이스를 조회합니다.',
       model: 'gemma3:12b',
+      systemPrompt: SYSTEM_AGENT_PROMPTS['system-sql'],
       icon: 'database',
       published: true,
       defaultTools: { sources: { rag: false, web_search: false, mcp: false, sql: true } },
@@ -223,6 +371,7 @@ export function StoreProvider({ children }) {
       agentType: 'mcp',
       description: '외부 MCP 도구를 사용하여 작업을 수행합니다.',
       model: 'gemma3:12b',
+      systemPrompt: SYSTEM_AGENT_PROMPTS['system-mcp'],
       icon: 'plug',
       published: true,
       defaultTools: { sources: { rag: false, web_search: false, mcp: true, sql: false } },
@@ -234,6 +383,7 @@ export function StoreProvider({ children }) {
       agentType: 'process',
       description: '배차, 경로 최적화 등 물류 업무를 처리합니다.',
       model: 'gemma3:12b',
+      systemPrompt: SYSTEM_AGENT_PROMPTS['system-process'],
       icon: 'truck',
       published: true,
       defaultTools: { sources: { rag: false, web_search: false, mcp: false, sql: false } },
@@ -242,6 +392,20 @@ export function StoreProvider({ children }) {
   ];
 
   const SYSTEM_AGENT_IDS = SYSTEM_AGENTS.map(a => a.id);
+
+  const mapAgentFromBackend = (a) => ({
+    id: a.agent_id,
+    name: a.name,
+    description: a.description || '',
+    model: a.model,
+    systemPrompt: resolveSystemPrompt(a.agent_id, a.system_prompt),
+    icon: a.icon || '',
+    color: a.color || '',
+    agentType: a.agent_type || 'custom',
+    published: a.published,
+    defaultTools: migrateDefaultTools(a.default_tools),
+    updated_at: a.updated_at,
+  });
 
   const [agents, setAgents] = useState(() => {
     const saved = localStorage.getItem('rag_ai_agents');
@@ -372,19 +536,7 @@ export function StoreProvider({ children }) {
       const agentResult = await agentsAPI.list();
       if (!mounted) return;
       if (agentResult.agents && agentResult.agents.length > 0) {
-        const mapped = agentResult.agents.map(a => ({
-          id: a.agent_id,
-          name: a.name,
-          description: a.description || '',
-          model: a.model,
-          systemPrompt: a.system_prompt || '',
-          icon: a.icon || '',
-          color: a.color || '',
-          agentType: a.agent_type || 'custom',
-          published: a.published,
-          defaultTools: migrateDefaultTools(a.default_tools),
-          updated_at: a.updated_at,
-        }));
+        const mapped = agentResult.agents.map(mapAgentFromBackend);
         // 백엔드에서 가져온 에이전트 + 누락된 시스템 에이전트 병합
         const backendIds = new Set(mapped.map(a => a.id));
         const missingSystem = SYSTEM_AGENTS.filter(sa => !backendIds.has(sa.id));
@@ -410,11 +562,11 @@ export function StoreProvider({ children }) {
       try {
         const mcpResult = await mcpAPI.list();
         if (!mounted) return;
-        if (mcpResult.servers && mcpResult.servers.length > 0) {
+        if (Array.isArray(mcpResult.servers)) {
           const mapped = mcpResult.servers.map(s => ({
-            id: s.server_id,
+            id: s.server_id || s.id,
             name: s.name,
-            type: s.server_type,
+            type: s.server_type || s.type || 'sse',
             url: s.url || '',
             command: s.command || '',
             headers_json: s.headers_json || '',
@@ -507,17 +659,76 @@ export function StoreProvider({ children }) {
   }, [currentKbId]);
 
   const addAgent = useCallback((agent) => {
-    setAgents(prev => [agent, ...prev]);
+    const optimistic = {
+      ...agent,
+      updated_at: agent.updated_at || new Date().toLocaleDateString(),
+    };
+    setAgents(prev => [optimistic, ...prev]);
+
+    agentsAPI.create({
+      agent_id: optimistic.id,
+      name: optimistic.name,
+      description: optimistic.description || '',
+      model: optimistic.model || 'gemma3:12b',
+      system_prompt: optimistic.systemPrompt || '',
+      icon: optimistic.icon || '',
+      color: optimistic.color || '',
+      agent_type: optimistic.agentType || 'custom',
+      published: optimistic.published ?? true,
+      default_tools: serializeDefaultTools(optimistic.defaultTools),
+    })
+      .then((created) => {
+        const mapped = mapAgentFromBackend(created);
+        setAgents(prev => [mapped, ...prev.filter(a => a.id !== optimistic.id)]);
+      })
+      .catch((e) => {
+        console.error('에이전트 백엔드 생성 실패:', e);
+        setAgents(prev => prev.filter(a => a.id !== optimistic.id));
+      });
   }, []);
 
   const updateAgent = useCallback((id, updates) => {
     setAgents(prev => prev.map(a =>
       a.id === id ? { ...a, ...updates, updated_at: new Date().toLocaleDateString() } : a
     ));
+
+    const payload = {};
+    if ('name' in updates) payload.name = updates.name;
+    if ('description' in updates) payload.description = updates.description;
+    if ('model' in updates) payload.model = updates.model;
+    if ('systemPrompt' in updates) payload.system_prompt = updates.systemPrompt;
+    if ('icon' in updates) payload.icon = updates.icon;
+    if ('color' in updates) payload.color = updates.color;
+    if ('agentType' in updates) payload.agent_type = updates.agentType;
+    if ('published' in updates) payload.published = updates.published;
+    if ('defaultTools' in updates) payload.default_tools = serializeDefaultTools(updates.defaultTools);
+
+    if (Object.keys(payload).length === 0) return;
+
+    agentsAPI.update(id, payload)
+      .then((updated) => {
+        const mapped = mapAgentFromBackend(updated);
+        setAgents(prev => prev.map(a => (a.id === id ? mapped : a)));
+      })
+      .catch((e) => {
+        // 백엔드에 없는 로컬 시드 에이전트일 수 있으므로 경고만 기록
+        console.warn('에이전트 백엔드 수정 실패:', e);
+      });
   }, []);
 
   const deleteAgent = useCallback((id) => {
-    setAgents(prev => prev.filter(a => a.id !== id));
+    let removed = null;
+    setAgents(prev => {
+      removed = prev.find(a => a.id === id) || null;
+      return prev.filter(a => a.id !== id);
+    });
+
+    agentsAPI.delete(id).catch((e) => {
+      console.warn('에이전트 백엔드 삭제 실패:', e);
+      if (removed) {
+        setAgents(prev => [removed, ...prev]);
+      }
+    });
   }, []);
 
   const addApiKey = useCallback((provider, key) => {
@@ -533,6 +744,13 @@ export function StoreProvider({ children }) {
     setApiKeys(prev => prev.filter(k => k.id !== id));
   }, []);
 
+  const syncMcpOrder = useCallback((servers) => {
+    const order = servers.map((s, idx) => ({ id: s.id, sort_order: idx }));
+    mcpAPI.reorder(order).catch((e) => {
+      console.error('MCP 서버 정렬 동기화 실패:', e);
+    });
+  }, []);
+
   const addMcpServer = useCallback(async (server) => {
     const serverId = generateUUID();
     const newServer = {
@@ -543,49 +761,68 @@ export function StoreProvider({ children }) {
     };
     setMcpServers(prev => [...prev, newServer]);
     try {
+      const serverType = server.type || 'sse';
       await mcpAPI.create({
+        id: serverId,
         server_id: serverId,
         name: server.name,
-        server_type: server.type || 'sse',
+        type: serverType,
+        server_type: serverType,
         url: server.url || '',
         command: server.command || '',
         headers_json: server.headers_json || '',
         enabled: true,
+        sort_order: mcpServers.length,
       });
     } catch (e) {
       console.error('MCP 서버 백엔드 저장 실패:', e);
+      setMcpServers(prev => prev.filter(s => s.id !== serverId));
     }
-  }, []);
+  }, [mcpServers.length]);
 
   const deleteMcpServer = useCallback(async (id) => {
-    setMcpServers(prev => prev.filter(s => s.id !== id));
+    setMcpServers(prev => {
+      const next = prev.filter(s => s.id !== id);
+      syncMcpOrder(next);
+      return next;
+    });
     try {
       await mcpAPI.delete(id);
     } catch (e) {
       console.error('MCP 서버 백엔드 삭제 실패:', e);
     }
-  }, []);
+  }, [syncMcpOrder]);
 
   const reorderMcpServer = useCallback((index, direction) => {
     setMcpServers(prev => {
       const newList = [...prev];
+      let changed = false;
       if (direction === 'up' && index > 0) {
         [newList[index], newList[index - 1]] = [newList[index - 1], newList[index]];
+        changed = true;
       } else if (direction === 'down' && index < newList.length - 1) {
         [newList[index], newList[index + 1]] = [newList[index + 1], newList[index]];
+        changed = true;
+      }
+      if (changed) {
+        syncMcpOrder(newList);
       }
       return newList;
     });
-  }, []);
+  }, [syncMcpOrder]);
 
   const moveMcpServer = useCallback((fromIndex, toIndex) => {
     setMcpServers(prev => {
+      if (fromIndex < 0 || toIndex < 0 || fromIndex >= prev.length || toIndex >= prev.length || fromIndex === toIndex) {
+        return prev;
+      }
       const newList = [...prev];
       const [movedItem] = newList.splice(fromIndex, 1);
       newList.splice(toIndex, 0, movedItem);
+      syncMcpOrder(newList);
       return newList;
     });
-  }, []);
+  }, [syncMcpOrder]);
 
   const addMessage = useCallback((msg) => {
     const msgId = msg.id || generateUUID();
@@ -635,6 +872,8 @@ export function StoreProvider({ children }) {
 
   const renameSession = useCallback((id, title) => {
     setSessions(prev => prev.map(s => s.id === id ? { ...s, title } : s));
+    sessionsAPI.update(id, { title })
+      .catch(e => console.warn('세션 제목 백엔드 저장 실패:', e));
   }, []);
 
   const deleteSession = useCallback(async (id) => {

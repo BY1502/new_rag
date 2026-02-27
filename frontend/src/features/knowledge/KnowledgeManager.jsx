@@ -127,7 +127,23 @@ export default function KnowledgeManager() {
       setIsConfigOpen(false);
     }
   };
-  const handleDeleteKb = () => { if (knowledgeBases.length <= 1) return toast.warning('최소 하나는 있어야 합니다.'); toastConfirm('삭제하시겠습니까?', () => { const newKbs = knowledgeBases.filter(kb => kb.id !== currentKbId); setKnowledgeBases(newKbs); setCurrentKbId(newKbs[0].id); setViewMode('list'); setIsConfigOpen(false); }, { confirmLabel: '삭제' }); };
+  const handleDeleteKb = () => {
+    if (knowledgeBases.length <= 1) return toast.warning('최소 하나는 있어야 합니다.');
+    toastConfirm('삭제하시겠습니까?', async () => {
+      try {
+        await knowledgeAPI.deleteBase(currentKbId);
+      } catch (e) {
+        console.error('KB delete API failed:', e);
+        return toast.error('지식 베이스 삭제에 실패했습니다.');
+      }
+
+      const newKbs = knowledgeBases.filter(kb => kb.id !== currentKbId);
+      setKnowledgeBases(newKbs);
+      setCurrentKbId(newKbs[0].id);
+      setViewMode('list');
+      setIsConfigOpen(false);
+    }, { confirmLabel: '삭제' });
+  };
 
   // GraphView는 별도 컴포넌트로 분리
   const GraphView = () => <InteractiveGraphView kbId={currentKbId} />;

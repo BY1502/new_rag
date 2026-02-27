@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import { useStore } from "../../contexts/StoreContext";
-import { streamChat, settingsAPI, extractFileText, feedbackAPI } from "../../api/client";
+import { useToast } from "../../contexts/ToastContext";
+import { streamChat, settingsAPI, extractFileText, feedbackAPI, sessionsAPI } from "../../api/client";
 import { generateUUID } from "../../utils/uuid";
 import {
   Bot,
@@ -26,6 +27,18 @@ import AgentPipeline from "./AgentPipeline";
 import FollowUpSuggestions from "./FollowUpSuggestions";
 import CitationPopover, { CitationBadge } from "./CitationPopover";
 import ContextChips from "./ContextChips";
+
+const TEXT_EXTENSIONS = [".txt", ".md", ".csv"];
+const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"];
+const DOCUMENT_EXTENSIONS = [".pdf", ".docx", ".doc", ".pptx", ".xlsx"];
+const ACCEPT_FILE_EXTENSIONS = [
+  ...DOCUMENT_EXTENSIONS,
+  ...TEXT_EXTENSIONS,
+  ...IMAGE_EXTENSIONS,
+];
+const MAX_ATTACHMENTS = 10;
+
+const getFileKey = (file) => `${file.name}:${file.size}:${file.lastModified}`;
 
 // 코드 블록 복사 버튼 컴포넌트
 function CodeBlockPre({ children, ...props }) {
@@ -62,6 +75,7 @@ const AgentIcon = ({ agentId, size = 12, className = "" }) => {
 };
 
 export default function ChatInterface() {
+  const { toast } = useToast();
   const {
     currentMessages,
     addMessage,
@@ -82,6 +96,7 @@ export default function ChatInterface() {
 
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
   const [files, setFiles] = useState([]);
   const [isExtractingFiles, setIsExtractingFiles] = useState(false);
 
@@ -238,10 +253,43 @@ export default function ChatInterface() {
     adjustTextarea();
   }, [input, adjustTextarea]);
 
+  const appendFiles = useCallback((incomingFiles) => {
+    if (!incomingFiles || incomingFiles.length === 0) return;
+
+    let duplicateCount = 0;
+    let overflowCount = 0;
+
+    setFiles((prev) => {
+      const next = [...prev];
+      const keys = new Set(prev.map(getFileKey));
+
+      for (const file of incomingFiles) {
+        const key = getFileKey(file);
+        if (keys.has(key)) {
+          duplicateCount += 1;
+          continue;
+        }
+        if (next.length >= MAX_ATTACHMENTS) {
+          overflowCount += 1;
+          continue;
+        }
+        next.push(file);
+        keys.add(key);
+      }
+      return next;
+    });
+
+    if (duplicateCount > 0) {
+      toast.info(`중복 파일 ${duplicateCount}개를 제외했습니다.`);
+    }
+    if (overflowCount > 0) {
+      toast.warning(`첨부 파일은 최대 ${MAX_ATTACHMENTS}개까지 가능합니다.`);
+    }
+  }, [toast]);
+
   const handleFileSelect = (e) => {
     if (e.target.files && e.target.files.length > 0) {
-      const selectedFiles = Array.from(e.target.files);
-      setFiles((prev) => [...prev, ...selectedFiles]);
+      appendFiles(Array.from(e.target.files));
     }
     e.target.value = "";
   };
@@ -278,8 +326,6 @@ export default function ChatInterface() {
     const activeSessionId = currentSessionId;
 
     // 파일 텍스트/이미지 추출
-    const TEXT_EXTENSIONS = [".txt", ".md", ".csv"];
-    const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"];
     let fileTexts = [];
     let imageBase64List = [];
     const currentFiles = [...files];
@@ -385,10 +431,13 @@ export default function ChatInterface() {
 
     const aiMessageId = generateUUID();
     let accumulatedText = "";
+    let latestThinking = null;
+    let latestToolCallsMeta = null;
 
     const initialThinking = smartMode
       ? "Smart Mode: 최적 소스를 분석하고 있습니다..."
       : null;
+    latestThinking = initialThinking;
 
     addMessage({
       id: aiMessageId,
@@ -433,6 +482,7 @@ export default function ChatInterface() {
           if (abortControllerRef.current?.signal.aborted) return;
 
           if (chunk.type === "thinking") {
+            latestThinking = chunk.thinking || latestThinking;
             setSessions((prev) =>
               prev.map((s) =>
                 s.id === activeSessionId
@@ -511,6 +561,7 @@ export default function ChatInterface() {
               ),
             );
           } else if (chunk.type === "tool_calls_meta") {
+            latestToolCallsMeta = chunk.tool_calls || latestToolCallsMeta;
             // 도구 호출 메타데이터를 AI 메시지에 첨부 (파인튜닝 데이터 수집용)
             setSessions((prev) =>
               prev.map((s) =>
@@ -567,8 +618,21 @@ export default function ChatInterface() {
           }
         },
         () => {
+          const wasAborted = abortControllerRef.current?.signal?.aborted;
           setIsTyping(false);
           abortControllerRef.current = null;
+
+          // 최종 assistant 응답을 백엔드에 영속화
+          if (!wasAborted && accumulatedText.trim()) {
+            sessionsAPI.addMessage(activeSessionId, {
+              role: "assistant",
+              content: accumulatedText,
+              thinking: latestThinking || null,
+              metadata_json: latestToolCallsMeta
+                ? JSON.stringify(latestToolCallsMeta)
+                : null,
+            }).catch((e) => console.warn("assistant 메시지 백엔드 저장 실패:", e));
+          }
         },
         abortControllerRef.current,
       );
@@ -587,6 +651,18 @@ export default function ChatInterface() {
         sources: [],
       });
     }
+  };
+
+  const hasInput = input.trim().length > 0 || files.length > 0;
+  const sqlDbRequired = effectiveSources.sql && !selectedDbConnectionId;
+  const sendDisabled = !hasInput || isTyping || isExtractingFiles || sqlDbRequired;
+
+  const handleInputKeyDown = (e) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    if (e.nativeEvent?.isComposing || isComposing) return;
+    if (sendDisabled) return;
+    e.preventDefault();
+    handleSend();
   };
 
   const handleStop = () => {
@@ -806,7 +882,7 @@ export default function ChatInterface() {
           )}
 
           <div className="bg-white border border-gray-300 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-green-400 focus-within:border-green-400 transition-all flex flex-col relative">
-            {/* 상단: Context Chips + 파일 태그 */}
+            {/* 상단: Context Chips */}
             <div className="px-3 pt-2.5 flex flex-wrap items-center gap-1.5">
               <ContextChips
                 agents={agents}
@@ -824,49 +900,62 @@ export default function ChatInterface() {
                 selectedDbConnectionId={selectedDbConnectionId}
                 onSelectDb={setSelectedDbConnectionId}
               />
-
-              {/* 파일 태그 */}
-              {files.map((file, idx) => {
-                const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
-                const isImage = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"].includes(ext);
-
-                return (
-                  <div
-                    key={idx}
-                    className="flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] font-medium text-gray-700 dark:text-gray-300 shadow-sm"
-                  >
-                    {isImage ? (
-                      <img
-                        src={getFilePreviewUrl(file)}
-                        alt={file.name}
-                        className="w-6 h-6 object-cover rounded"
-                      />
-                    ) : (
-                      <Paperclip size={10} className="text-gray-400" />
-                    )}
-                    <span className="max-w-[100px] truncate">{file.name}</span>
-                    <button
-                      onClick={() =>
-                        setFiles((p) => p.filter((_, i) => i !== idx))
-                      }
-                      className="text-gray-400 hover:text-red-500 ml-0.5"
-                    >
-                      <X size={10} />
-                    </button>
-                  </div>
-                );
-              })}
             </div>
+
+            {/* 파일 태그 */}
+            {files.length > 0 && (
+              <div className="px-3 pb-1.5 pt-1 flex items-start gap-2">
+                <div className="flex flex-wrap items-center gap-1.5 max-h-20 overflow-y-auto custom-scrollbar">
+                  {/* 파일 태그 */}
+                  {files.map((file, idx) => {
+                    const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+                    const isImage = IMAGE_EXTENSIONS.includes(ext);
+
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] font-medium text-gray-700 dark:text-gray-300 shadow-sm"
+                      >
+                        {isImage ? (
+                          <img
+                            src={getFilePreviewUrl(file)}
+                            alt={file.name}
+                            className="w-6 h-6 object-cover rounded"
+                          />
+                        ) : (
+                          <Paperclip size={10} className="text-gray-400" />
+                        )}
+                        <span className="max-w-[100px] truncate">{file.name}</span>
+                        <button
+                          onClick={() =>
+                            setFiles((p) => p.filter((_, i) => i !== idx))
+                          }
+                          className="text-gray-400 hover:text-red-500 ml-0.5"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={() => setFiles([])}
+                  className="shrink-0 px-2 py-1 text-[10px] font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md border border-gray-200 transition-colors"
+                  title="첨부 파일 전체 제거"
+                >
+                  전체 삭제
+                </button>
+              </div>
+            )}
 
             <textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) =>
-                e.key === "Enter" &&
-                !e.shiftKey &&
-                (e.preventDefault(), handleSend())
-              }
+              onKeyDown={handleInputKeyDown}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={() => setIsComposing(false)}
+              onBlur={() => setIsComposing(false)}
               placeholder={`${currentAgent?.name || "AI"}에게 메시지를 입력하세요...`}
               className="w-full bg-transparent border-none outline-none resize-none px-4 py-2 text-sm custom-scrollbar leading-relaxed min-h-[44px] max-h-48 dark:text-gray-100 dark:placeholder-gray-500"
               rows={1}
@@ -877,14 +966,15 @@ export default function ChatInterface() {
                 <input
                   type="file"
                   multiple
-                  accept=".pdf,.docx,.doc,.txt,.md,.pptx,.xlsx,.csv"
+                  accept={ACCEPT_FILE_EXTENSIONS.join(",")}
                   className="hidden"
                   ref={fileInputRef}
                   onChange={handleFileSelect}
                 />
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="p-2 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 rounded-xl transition"
+                  disabled={isTyping || isExtractingFiles || files.length >= MAX_ATTACHMENTS}
+                  className="p-2 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400"
                   title="파일 첨부"
                 >
                   <Paperclip size={18} />
@@ -892,9 +982,9 @@ export default function ChatInterface() {
               </div>
               <button
                 onClick={() => handleSend()}
-                disabled={(!input.trim() && files.length === 0) || isTyping || isExtractingFiles}
+                disabled={sendDisabled}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-sm ${
-                  (input.trim() || files.length > 0) && !isTyping && !isExtractingFiles
+                  !sendDisabled
                     ? "bg-green-500 text-white hover:bg-green-600 shadow-sm hover:shadow"
                     : "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
                 }`}
@@ -908,6 +998,16 @@ export default function ChatInterface() {
                 )}
                 <span className="hidden sm:inline">{isExtractingFiles ? "분석 중" : "전송"}</span>
               </button>
+            </div>
+            <div className="flex items-center justify-between px-3 pb-2">
+              <p className="text-[10px] text-gray-400">
+                {isComposing ? "한글 입력 중..." : "Enter 전송 · Shift+Enter 줄바꿈"}
+              </p>
+              {sqlDbRequired && (
+                <p className="text-[10px] text-amber-600 font-medium">
+                  SQL 사용 시 DB 연결을 먼저 선택하세요.
+                </p>
+              )}
             </div>
           </div>
           <p className="text-center text-[10px] text-gray-400 dark:text-gray-500 mt-1.5">

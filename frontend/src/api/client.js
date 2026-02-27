@@ -100,7 +100,7 @@ const fetchWithTimeout = async (url, options, timeout = REQUEST_TIMEOUT) => {
  * 스트리밍 채팅 API
  */
 export const streamChat = async (
-  { query, model, kb_ids, use_rag, web_search, use_deep_think, active_mcp_ids, system_prompt, history, top_k, use_rerank, search_provider, search_mode, images, use_sql, db_connection_id, use_multimodal_search },
+  { query, model, kb_ids, use_rag, web_search, use_deep_think, active_mcp_ids, system_prompt, history, top_k, use_rerank, search_provider, search_mode, dense_weight, images, use_sql, db_connection_id, use_multimodal_search },
   onChunk,
   onComplete,
   abortController,
@@ -126,6 +126,7 @@ export const streamChat = async (
         use_rerank: use_rerank || false,
         search_provider: search_provider || null,
         search_mode: search_mode || 'hybrid',
+        dense_weight: dense_weight ?? 0.5,
         images: images || [],
         use_sql: use_sql || false,
         db_connection_id: db_connection_id || null,
@@ -1116,13 +1117,18 @@ export const mcpAPI = {
     return await response.json();
   },
 
-  reorder: async (serverIds) => {
+  reorder: async (order) => {
+    const normalizedOrder =
+      Array.isArray(order) && order.length > 0 && typeof order[0] === "string"
+        ? order.map((id, idx) => ({ id, sort_order: idx }))
+        : (order || []);
+
     const response = await fetchWithTimeout(
       `${API_BASE_URL}/settings/mcp-servers/reorder`,
       {
         method: "PUT",
         headers: { ...getAuthHeader(), "Content-Type": "application/json" },
-        body: JSON.stringify({ server_ids: serverIds }),
+        body: JSON.stringify({ order: normalizedOrder }),
       },
     );
     if (!response.ok) await handleApiError(response);

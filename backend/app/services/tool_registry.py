@@ -162,7 +162,7 @@ class MCPConnection:
 
             self._exit_stack = AsyncExitStack()
 
-            if self.server_type in ("sse", "streamableHttp"):
+            if self.server_type in ("sse", "streamableHttp", "streamable-http", "streamable_http"):
                 # SSE 트랜스포트
                 read_stream, write_stream = await self._exit_stack.enter_async_context(
                     sse_client(self.url, headers=self.headers)

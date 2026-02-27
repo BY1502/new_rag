@@ -46,31 +46,32 @@ async def lifespan(app: FastAPI):
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables created (development mode)")
 
-    # 1-1. 누락된 컬럼 자동 추가 (기존 테이블 마이그레이션)
-    try:
-        from sqlalchemy import text
-        async with engine.begin() as conn:
-            await conn.execute(text(
-                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS dense_weight FLOAT DEFAULT 0.5"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE conversation_feedbacks ADD COLUMN IF NOT EXISTS tool_calls_json TEXT"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE db_connections ADD COLUMN IF NOT EXISTS schema_metadata TEXT"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS custom_model VARCHAR(200)"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS agent_type VARCHAR(50) DEFAULT 'custom'"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS default_tools TEXT"
-            ))
-        logger.info("DB migration: dense_weight, tool_calls_json, schema_metadata, custom_model, agent_type, default_tools columns ensured")
-    except Exception as e:
-        logger.warning(f"DB auto-migration skipped: {e}")
+    # 1-1. 누락된 컬럼 자동 추가 (개발 환경 전용 임시 마이그레이션)
+    if settings.ENVIRONMENT == "development":
+        try:
+            from sqlalchemy import text
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS dense_weight FLOAT DEFAULT 0.5"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE conversation_feedbacks ADD COLUMN IF NOT EXISTS tool_calls_json TEXT"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE db_connections ADD COLUMN IF NOT EXISTS schema_metadata TEXT"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS custom_model VARCHAR(200)"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE agents ADD COLUMN IF NOT EXISTS agent_type VARCHAR(50) DEFAULT 'custom'"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE agents ADD COLUMN IF NOT EXISTS default_tools TEXT"
+                ))
+            logger.info("DB migration: dense_weight, tool_calls_json, schema_metadata, custom_model, agent_type, default_tools columns ensured")
+        except Exception as e:
+            logger.warning(f"DB auto-migration skipped: {e}")
 
     # 2. Redis 연결
     cache = get_cache_service()

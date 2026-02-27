@@ -47,6 +47,7 @@ async def run_finetuning_job(
     async_session = sessionmaker(engine, class_=AS, expire_on_commit=False)
 
     async with async_session() as db:
+        job = None
         try:
             stmt = select(FineTuningJob).where(FineTuningJob.job_id == job_id)
             result = await db.execute(stmt)
@@ -110,9 +111,10 @@ async def run_finetuning_job(
 
         except Exception as e:
             logger.exception(f"Fine-tuning job {job_id} error: {e}")
-            job.status = "failed"
-            job.error_message = str(e)
-            await db.commit()
+            if job:
+                job.status = "failed"
+                job.error_message = str(e)
+                await db.commit()
 
     await engine.dispose()
 
